@@ -1,3 +1,37 @@
+### How To Run
+
+```bash
+uv venv --python 3.12
+source .venv/bin/activate
+uv pip install -e .
+```
+
+You need to set DATA DIR
+```bash
+export TAU2_DATA_DIR='path_to_repo/data'
+```
+
+Check if DATA DIR is setup correctly:
+```bash
+tau2 check-data
+```
+
+Run evaluation on task id 7 of airline using reward basis as DB (final db state check) and NL_ASSERTION (llm as judge):
+```bash
+tau2 run \
+  --domain airline \
+  --task-set-name airline_with_reward_basis \
+  --agent-llm gpt-4.1-mini \
+  --user-llm gpt-4o \
+  --num-trials 1 \
+  --max-concurrency 1 \
+;
+```
+
+
+
+---
+
 # $\tau^2$-Bench: Evaluating Conversational Agents in a Dual-Control Environment
 
 [![python](https://img.shields.io/badge/Python-3.10%2B-blue.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
