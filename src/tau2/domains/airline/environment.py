@@ -35,3 +35,10 @@ def get_tasks() -> list[Task]:
     with open(AIRLINE_TASK_SET_PATH, "r") as fp:
         tasks = json.load(fp)
     return [Task.model_validate(task) for task in tasks]
+
+
+def get_tasks_with_reward_basis() -> list[Task]:
+    tasks_path = AIRLINE_TASK_SET_PATH.parent / "tasks_with_reward_basis.json"
+    with open(tasks_path, "r") as fp:
+        tasks = json.load(fp)
+    return [Task.model_validate(task) for task in tasks]
