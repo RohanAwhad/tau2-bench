@@ -108,13 +108,45 @@ class ParticipantMessageBase(BaseModel):
         description="The raw data of the message.", default=None
     )
 
+    def _get_validation_debug_info(self) -> str:
+        """
+        Build concise debug context for invalid participant messages.
+        """
+        tool_calls_count = len(self.tool_calls) if self.tool_calls is not None else 0
+        parts = [
+            f"role={self.role!r}",
+            f"content={self.content!r}",
+            f"content_type={type(self.content).__name__}",
+            f"tool_calls_count={tool_calls_count}",
+        ]
+
+        if isinstance(self.raw_data, dict):
+            parts.append(f"raw_finish_reason={self.raw_data.get('finish_reason')!r}")
+            raw_message = self.raw_data.get("message")
+            if isinstance(raw_message, dict):
+                parts.append(f"raw_message_content={raw_message.get('content')!r}")
+                raw_message_tool_calls = raw_message.get("tool_calls")
+                if isinstance(raw_message_tool_calls, list):
+                    parts.append(
+                        f"raw_message_tool_calls_count={len(raw_message_tool_calls)}"
+                    )
+                else:
+                    parts.append(f"raw_message_tool_calls={raw_message_tool_calls!r}")
+            else:
+                parts.append(f"raw_message={raw_message!r}")
+
+        return ", ".join(parts)
+
     def validate(self):  # NOTE: It would be better to do this in the Pydantic model
         """
         Validate the message.
         """
         if not (self.has_text_content() or self.is_tool_call()):
             raise ValueError(
-                f"AssistantMessage must have either content or tool calls. Got {self}"
+                f"{self.__class__.__name__} must contain non-empty content or at least one tool call. "
+                f"Debug: {self._get_validation_debug_info()}. "
+                "If using an OpenAI-compatible wrapper, ensure the response includes either "
+                "`message.content` or `message.tool_calls`."
             )
 
     def has_text_content(self) -> bool:

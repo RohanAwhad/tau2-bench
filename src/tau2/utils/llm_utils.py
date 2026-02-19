@@ -216,6 +216,13 @@ def generate(
     except Exception as e:
         logger.error(e)
         raise e
+
+    full_response_dict = None
+    if hasattr(response, "to_dict"):
+        full_response_dict = response.to_dict()
+    elif hasattr(response, "model_dump"):
+        full_response_dict = response.model_dump()
+
     cost = get_response_cost(response)
     usage = get_response_usage(response)
     response = response.choices[0]
@@ -241,13 +248,21 @@ def generate(
     ]
     tool_calls = tool_calls or None
 
+    raw_data = response.to_dict()
+    if isinstance(full_response_dict, dict):
+        completion_metadata = {
+            key: value for key, value in full_response_dict.items() if key != "choices"
+        }
+        if completion_metadata:
+            raw_data["completion_metadata"] = completion_metadata
+
     message = AssistantMessage(
         role="assistant",
         content=content,
         tool_calls=tool_calls,
         cost=cost,
         usage=usage,
-        raw_data=response.to_dict(),
+        raw_data=raw_data,
     )
     return message
 
