@@ -25,30 +25,30 @@
 
 Conclusion: no statistically significant difference at typical thresholds (all p-values > 0.05; CIs include 0).
 
-## Update: served-adapter post-fix prod run
+## Update: served-adapter prod run (latest)
 
 - New run:
-  - `data/simulations/served_adapter_agent_user_120b_airline_full_3trials_20260219_postfix1_mc50.json`
+  - `data/simulations/served_adapter_agent_user_120b_airline_full_3trials_20260219_prod_mc50.json`
 - Common setup retained: `airline`, `50` tasks, `3` trials per task.
 
 - served-adapter (`agent=served-adapter`, `user=gpt-oss-120b`):
-  - `pass^1=0.4400`, `pass^2=0.3267`, `pass^3=0.2400`
-  - `pass@1=0.4400`, `pass@2=0.5533`, `pass@3=0.5800`
+  - `pass^1=0.4200`, `pass^2=0.3200`, `pass^3=0.2800`
+  - `pass@1=0.4200`, `pass@2=0.5200`, `pass@3=0.5800`
 
 ### Delta vs served-direct baseline
 
-- `pass^1`: `-0.0200`
-- `pass^2`: `-0.0333`
-- `pass^3`: `-0.0800`
-- `pass@1`: `-0.0200`
-- `pass@2`: `-0.0067`
+- `pass^1`: `-0.0400`
+- `pass^2`: `-0.0400`
+- `pass^3`: `-0.0400`
+- `pass@1`: `-0.0400`
+- `pass@2`: `-0.0400`
 - `pass@3`: `-0.0400`
 
 ### Delta vs gpt-oss-120b baseline
 
-- `pass^1`: `+0.0133`
-- `pass^2`: `+0.0067`
-- `pass^3`: `-0.0200`
-- `pass@1`: `+0.0133`
-- `pass@2`: `+0.0200`
+- `pass^1`: `-0.0067`
+- `pass^2`: `+0.0000`
+- `pass^3`: `+0.0200`
+- `pass@1`: `-0.0067`
+- `pass@2`: `-0.0133`
 - `pass@3`: `+0.0000`

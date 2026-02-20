@@ -536,7 +536,8 @@
     <h1>Airline Benchmark Analysis</h1>
     <p class="muted">
       Focused comparison: <code>served-direct</code> vs <code>served-adapter</code>.
-      Serve locally with <code>python3 -m http.server 8001</code> and open this page.
+      Serve locally with <code>python3 -m http.server 8001</code>, paste a short-lived
+      <code>gcloud auth print-access-token</code> token in Trace Copilot, and chat with the selected trace.
     </p>
 
     <div id="status" class="muted">Loading...</div>
@@ -673,12 +674,35 @@
           <div class="copilot-panel">
             <div class="copilot-head">
               <span>Trace Copilot</span>
-              <span class="copilot-sub">model: <code>gpt-5.2</code></span>
+              <span class="copilot-sub">provider: <code>google-vertex-anthropic</code></span>
             </div>
             <div class="copilot-auth">
-              <input id="copilot-api-key" type="password" placeholder="OpenAI API key (stored in this browser session)" />
-              <button id="copilot-save-key" type="button">Save key</button>
+              <input id="copilot-access-token" type="password" placeholder="gcloud access token (stored in this browser session)" />
+              <button id="copilot-save-token" type="button">Save token</button>
             </div>
+            <details class="compact-panel" style="margin-bottom:8px;">
+              <summary>Vertex settings</summary>
+              <div class="compact-panel-body" style="padding-top:8px;">
+                <div class="controls">
+                  <div>
+                    <label for="copilot-vertex-project">Project ID</label>
+                    <input id="copilot-vertex-project" type="text" placeholder="your-gcp-project-id" />
+                  </div>
+                  <div>
+                    <label for="copilot-vertex-region">Region</label>
+                    <input id="copilot-vertex-region" type="text" value="us-east5" />
+                  </div>
+                  <div>
+                    <label for="copilot-vertex-model">Model</label>
+                    <input id="copilot-vertex-model" type="text" value="claude-opus-4-6@default" />
+                  </div>
+                  <div>
+                    <label>&nbsp;</label>
+                    <button id="copilot-save-settings" type="button">Save settings</button>
+                  </div>
+                </div>
+              </div>
+            </details>
             <div id="copilot-context" class="copilot-sub">Select a trace to start.</div>
             <div class="copilot-quick">
               <button id="copilot-quick-failure" type="button">Why did this fail?</button>
@@ -728,8 +752,8 @@
         label: "served-adapter",
         color: "#c15f3c",
         files: [
-          "../data/simulations/served_adapter_agent_user_120b_airline_full_3trials_20260219_postfix1_mc50.json",
-          "/data/simulations/served_adapter_agent_user_120b_airline_full_3trials_20260219_postfix1_mc50.json"
+          "../data/simulations/served_adapter_agent_user_120b_airline_full_3trials_20260219_prod_mc50.json",
+          "/data/simulations/served_adapter_agent_user_120b_airline_full_3trials_20260219_prod_mc50.json"
         ]
       }
     ];
@@ -747,12 +771,17 @@
       messages: [],
       loading: false
     };
-    const COPILOT_MODEL = "gpt-5.2";
-    const COPILOT_KEY_STORAGE = "tau2_trace_copilot_openai_key";
+    const COPILOT_DEFAULT_MODEL = "claude-opus-4-6@default";
+    const COPILOT_DEFAULT_REGION = "us-east5";
+    const COPILOT_TOKEN_STORAGE = "tau2_trace_copilot_vertex_access_token";
+    const COPILOT_PROJECT_STORAGE = "tau2_trace_copilot_vertex_project";
+    const COPILOT_REGION_STORAGE = "tau2_trace_copilot_vertex_region";
+    const COPILOT_MODEL_STORAGE = "tau2_trace_copilot_vertex_model";
     const COPILOT_SYSTEM_PROMPT =
       "You are Trace Copilot for tau2 benchmark trajectories. " +
       "Analyze a selected trace and answer with concise, practical debugging guidance. " +
-      "Reference turn indexes when possible and prioritize actionable fixes.";
+      "Reference turn indexes when possible and prioritize actionable fixes. " +
+      "Reply in 5 bullet points at max unless specified otherwise";
 
     function comb(n, k) {
       if (k < 0 || k > n) return 0;
@@ -1404,65 +1433,110 @@
       document.getElementById("copilot-status").textContent = text;
     }
 
-    function getCopilotApiKey() {
-      return document.getElementById("copilot-api-key").value.trim();
+    function getCopilotAccessToken() {
+      return document.getElementById("copilot-access-token").value.trim();
     }
 
-    function saveCopilotApiKey() {
-      const key = getCopilotApiKey();
-      if (!key) {
-        setCopilotStatus("Enter an API key first.");
+    function getCopilotVertexConfig() {
+      return {
+        project: document.getElementById("copilot-vertex-project").value.trim(),
+        region: document.getElementById("copilot-vertex-region").value.trim() || COPILOT_DEFAULT_REGION,
+        model: document.getElementById("copilot-vertex-model").value.trim() || COPILOT_DEFAULT_MODEL
+      };
+    }
+
+    function saveCopilotAccessToken() {
+      const token = getCopilotAccessToken();
+      if (!token) {
+        setCopilotStatus("Enter access token first.");
         return;
       }
-      sessionStorage.setItem(COPILOT_KEY_STORAGE, key);
-      setCopilotStatus("API key saved for this browser session.");
+      sessionStorage.setItem(COPILOT_TOKEN_STORAGE, token);
+      setCopilotStatus("Access token saved for this browser session.");
     }
 
-    function loadCopilotApiKey() {
-      const key = sessionStorage.getItem(COPILOT_KEY_STORAGE) || "";
-      if (key) {
-        document.getElementById("copilot-api-key").value = key;
+    function saveCopilotVertexSettings() {
+      const cfg = getCopilotVertexConfig();
+      if (!cfg.project) {
+        setCopilotStatus("Set Vertex project id first.");
+        return;
       }
+      sessionStorage.setItem(COPILOT_PROJECT_STORAGE, cfg.project);
+      sessionStorage.setItem(COPILOT_REGION_STORAGE, cfg.region);
+      sessionStorage.setItem(COPILOT_MODEL_STORAGE, cfg.model);
+      setCopilotStatus("Vertex settings saved for this browser session.");
     }
 
-    function buildCopilotOpenAIMessages(trace, prompt, history) {
-      const msgs = [{ role: "system", content: COPILOT_SYSTEM_PROMPT }];
+    function loadCopilotConfig() {
+      const token = sessionStorage.getItem(COPILOT_TOKEN_STORAGE) || "";
+      const project = sessionStorage.getItem(COPILOT_PROJECT_STORAGE) || "";
+      const region = sessionStorage.getItem(COPILOT_REGION_STORAGE) || COPILOT_DEFAULT_REGION;
+      const model = sessionStorage.getItem(COPILOT_MODEL_STORAGE) || COPILOT_DEFAULT_MODEL;
 
+      document.getElementById("copilot-access-token").value = token;
+      document.getElementById("copilot-vertex-project").value = project;
+      document.getElementById("copilot-vertex-region").value = region;
+      document.getElementById("copilot-vertex-model").value = model;
+    }
+
+    function buildCopilotVertexMessages(trace, prompt, history) {
       const filteredHistory = history
         .filter((m) => m.role === "user" || m.role === "assistant")
         .slice(-12)
-        .map((m) => ({ role: m.role, content: truncateText(m.content, 2000) }));
-      msgs.push(...filteredHistory);
+        .map((m) => ({
+          role: m.role,
+          content: [{ type: "text", text: truncateText(m.content, 2000) }]
+        }));
 
       const traceJson = JSON.stringify(buildCopilotTracePayload(trace));
-      msgs.push({
+      filteredHistory.push({
         role: "user",
-        content:
-          "Trace context (JSON):\n```json\n" +
-          traceJson +
-          "\n```\n\nUser question: " +
-          prompt +
-          "\n\nAnswer in concise bullets and cite turn indexes for key claims."
+        content: [
+          {
+            type: "text",
+            text:
+              "Trace context (JSON):\n```json\n" +
+              traceJson +
+              "\n```\n\nUser question: " +
+              prompt +
+              "\n\nAnswer in concise bullets and cite turn indexes for key claims."
+          }
+        ]
       });
 
-      return msgs;
+      return filteredHistory;
     }
 
-    function parseOpenAIReply(data) {
-      const choices = data?.choices || [];
-      if (!choices.length) return "No completion choices returned.";
-      const message = choices[0]?.message || {};
-      const content = message?.content;
+    function buildCopilotVertexEndpoint(cfg) {
+      return (
+        `https://${cfg.region}-aiplatform.googleapis.com/v1/projects/${cfg.project}` +
+        `/locations/${cfg.region}/publishers/anthropic/models/${cfg.model}:rawPredict`
+      );
+    }
 
-      if (typeof content === "string") return content;
-      if (Array.isArray(content)) {
-        const parts = content
+    function parseVertexReply(data) {
+      const direct = data?.content;
+      if (Array.isArray(direct)) {
+        const text = direct
           .map((x) => (x && typeof x.text === "string" ? x.text : ""))
-          .filter((x) => x);
-        if (parts.length) return parts.join("\n");
+          .filter(Boolean)
+          .join("\n");
+        if (text) return text;
       }
 
-      return JSON.stringify(message);
+      const pred = Array.isArray(data?.predictions) ? data.predictions[0] : null;
+      if (pred && Array.isArray(pred.content)) {
+        const text = pred.content
+          .map((x) => (x && typeof x.text === "string" ? x.text : ""))
+          .filter(Boolean)
+          .join("\n");
+        if (text) return text;
+      }
+
+      if (typeof pred?.output_text === "string" && pred.output_text) return pred.output_text;
+      if (typeof data?.output_text === "string" && data.output_text) return data.output_text;
+
+      return JSON.stringify(data);
     }
 
     function renderCopilotChat() {
@@ -1564,9 +1638,15 @@
       const trace = getSelectedTrace();
       if (!trace) return;
 
-      const apiKey = getCopilotApiKey();
-      if (!apiKey) {
-        setCopilotStatus("Add your OPENAI_API_KEY in the copilot key box.");
+      const token = getCopilotAccessToken();
+      const cfg = getCopilotVertexConfig();
+
+      if (!token) {
+        setCopilotStatus("Paste gcloud access token and save it first.");
+        return;
+      }
+      if (!cfg.project) {
+        setCopilotStatus("Set Vertex project id in Trace Copilot settings.");
         return;
       }
 
@@ -1580,15 +1660,17 @@
       setCopilotStatus("Thinking...");
 
       try {
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        const response = await fetch(buildCopilotVertexEndpoint(cfg), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`
+            Authorization: `Bearer ${token}`
           },
           body: JSON.stringify({
-            model: COPILOT_MODEL,
-            messages: buildCopilotOpenAIMessages(trace, prompt, copilotState.messages)
+            anthropic_version: "vertex-2023-10-16",
+            max_tokens: 1200,
+            system: COPILOT_SYSTEM_PROMPT,
+            messages: buildCopilotVertexMessages(trace, prompt, copilotState.messages)
           })
         });
 
@@ -1598,7 +1680,7 @@
         }
 
         const data = await response.json();
-        const reply = String(parseOpenAIReply(data) || "").trim() || "(empty response)";
+        const reply = String(parseVertexReply(data) || "").trim() || "(empty response)";
         copilotState.messages.push({ role: "assistant", content: reply });
         setCopilotStatus("");
       } catch (err) {
@@ -1614,21 +1696,36 @@
     }
 
     function initCopilot() {
-      loadCopilotApiKey();
+      loadCopilotConfig();
       renderCopilotChat();
 
-      if (!getCopilotApiKey()) {
-        setCopilotStatus("Paste OPENAI_API_KEY value and click Save key.");
+      const cfg = getCopilotVertexConfig();
+      if (!getCopilotAccessToken()) {
+        setCopilotStatus("Paste gcloud access token and click Save token.");
+      } else if (!cfg.project) {
+        setCopilotStatus("Set Vertex project id and click Save settings.");
       }
 
-      document.getElementById("copilot-save-key").addEventListener("click", () => {
-        saveCopilotApiKey();
+      document.getElementById("copilot-save-token").addEventListener("click", () => {
+        saveCopilotAccessToken();
       });
 
-      document.getElementById("copilot-api-key").addEventListener("keydown", (event) => {
+      document.getElementById("copilot-access-token").addEventListener("keydown", (event) => {
         if (event.key !== "Enter") return;
         event.preventDefault();
-        saveCopilotApiKey();
+        saveCopilotAccessToken();
+      });
+
+      document.getElementById("copilot-save-settings").addEventListener("click", () => {
+        saveCopilotVertexSettings();
+      });
+
+      ["copilot-vertex-project", "copilot-vertex-region", "copilot-vertex-model"].forEach((id) => {
+        document.getElementById(id).addEventListener("keydown", (event) => {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          saveCopilotVertexSettings();
+        });
       });
 
       document.getElementById("copilot-send").addEventListener("click", () => {
