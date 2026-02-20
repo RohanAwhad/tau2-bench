@@ -195,6 +195,84 @@
       margin-bottom: 5px;
     }
 
+    .funnel {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin-top: 6px;
+    }
+
+    .funnel-row {
+      display: flex;
+      align-items: stretch;
+      min-height: 38px;
+    }
+
+    .funnel-label {
+      width: 140px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      font-size: 0.82rem;
+      color: var(--muted);
+      padding-right: 8px;
+      text-align: right;
+      justify-content: flex-end;
+    }
+
+    .funnel-bar-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      position: relative;
+    }
+
+    .funnel-bar {
+      height: 28px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #fff;
+      white-space: nowrap;
+      min-width: 32px;
+      transition: width 0.3s ease;
+    }
+
+    .funnel-bar-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .funnel-connector {
+      width: 140px;
+      flex-shrink: 0;
+    }
+
+    .funnel-connector-line {
+      margin-left: 140px;
+      border-left: 2px solid #cdd5d8;
+      height: 10px;
+    }
+
+    .funnel-indent {
+      padding-left: 20px;
+    }
+
+    .funnel-group-header {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      padding: 6px 0 2px;
+      margin-left: 140px;
+      border-left: 2px solid #cdd5d8;
+      padding-left: 10px;
+    }
+
     .controls {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -715,14 +793,24 @@
       <div id="adapter-usefulness-story" class="story-grid" style="margin-top:8px;"></div>
       <div id="adapter-usefulness-takeaway" class="adapter-takeaway" style="margin-top:8px;"></div>
 
+      <div style="margin-top:8px;">
+        <strong style="font-size:0.9rem;">Adapter intervention funnel</strong>
+        <div id="adapterFunnelChart"></div>
+      </div>
+
+      <div style="margin-top:8px;">
+        <strong style="font-size:0.9rem;">Where major failures came from</strong>
+        <canvas id="adapterRootCauseChart"></canvas>
+      </div>
+
       <div class="grid-2" style="margin-top:8px;">
         <div>
-          <strong style="font-size:0.9rem;">How adapter interventions ended (major failure level)</strong>
-          <canvas id="adapterOutcomeChart"></canvas>
+          <strong style="font-size:0.9rem;">Usefulness score distribution (per trace)</strong>
+          <canvas id="adapterUsefulnessHistChart"></canvas>
         </div>
         <div>
-          <strong style="font-size:0.9rem;">Where major failures came from</strong>
-          <canvas id="adapterRootCauseChart"></canvas>
+          <strong style="font-size:0.9rem;">Major failures vs task reward</strong>
+          <canvas id="adapterFailuresVsRewardChart"></canvas>
         </div>
       </div>
 
@@ -732,6 +820,13 @@
       </div>
 
       <div id="adapter-usefulness-priority" class="priority-list"></div>
+
+      <details class="compact-panel" style="margin-top:10px; margin-bottom:0;" id="adapter-usefulness-examples-panel">
+        <summary>Worst blunders &amp; best saves (case studies)</summary>
+        <div class="compact-panel-body" id="adapter-usefulness-examples" style="font-size:0.88rem; line-height:1.5;">
+          <span class="muted">Loading examples...</span>
+        </div>
+      </details>
 
       <details class="compact-panel" style="margin-top:10px; margin-bottom:0;" id="adapter-usefulness-table-panel">
         <summary>Per-trace adapter usefulness table</summary>
@@ -1352,14 +1447,35 @@
 
       const leadRoot = rootEntries[0] || { key: "unknown", label: "unknown", count: 0 };
 
-      const failureBuckets = [
-        { label: "0", count: failureValues.filter((x) => x === 0).length },
-        { label: "1", count: failureValues.filter((x) => x === 1).length },
-        { label: "2", count: failureValues.filter((x) => x === 2).length },
-        { label: "3", count: failureValues.filter((x) => x === 3).length },
-        { label: "4", count: failureValues.filter((x) => x === 4).length },
-        { label: "5+", count: failureValues.filter((x) => x >= 5).length }
+      const maxFail = Math.max(...failureValues, 0);
+      const failureBuckets = [];
+      for (let i = 0; i <= Math.min(maxFail, 9); i++) {
+        failureBuckets.push({ label: String(i), count: failureValues.filter((x) => x === i).length });
+      }
+      if (maxFail >= 10) {
+        failureBuckets.push({ label: "10+", count: failureValues.filter((x) => x >= 10).length });
+      }
+
+      const usefulnessScores = rows.map((r) => r.usefulnessScore);
+      const usefulnessBins = [
+        { label: "-1.0", lo: -1.01, hi: -0.75 },
+        { label: "-0.75", lo: -0.75, hi: -0.5 },
+        { label: "-0.5", lo: -0.5, hi: -0.25 },
+        { label: "-0.25", lo: -0.25, hi: -0.001 },
+        { label: "0", lo: -0.001, hi: 0.001 },
+        { label: "0.25", lo: 0.001, hi: 0.25 },
+        { label: "0.5", lo: 0.25, hi: 0.5 },
+        { label: "0.75", lo: 0.5, hi: 0.75 },
+        { label: "1.0", lo: 0.75, hi: 1.01 }
       ];
+      const usefulnessHist = usefulnessBins.map((bin) => ({
+        label: bin.label,
+        count: usefulnessScores.filter((s) => s > bin.lo && s <= bin.hi).length
+      }));
+      // traces with 0 failures get score 0, count them into the "0" bin
+      const zeroFailTraces = failureValues.filter((x) => x === 0).length;
+      usefulnessHist[4].count += zeroFailTraces - usefulnessScores.filter((s) => s > -0.001 && s <= 0.001).length > 0
+        ? 0 : 0; // already counted correctly via usefulnessScores
 
       const topTriage = [...rows]
         .sort(
@@ -1376,6 +1492,13 @@
           majorFailures: r.majorFailures,
           usefulnessScore: r.usefulnessScore
         }));
+
+      const failuresVsReward = rows.map((r) => ({
+        x: r.majorFailures,
+        y: r.usefulnessScore,
+        taskId: r.taskId,
+        trial: r.trial
+      }));
 
       return {
         totalTraces,
@@ -1394,6 +1517,8 @@
         rootEntries,
         leadRoot,
         failureBuckets,
+        usefulnessHist,
+        failuresVsReward,
         topTriage
       };
     }
@@ -1722,7 +1847,8 @@
         takeawayEl.innerHTML = "";
         priorityEl.innerHTML = '<span class="muted">No triage data.</span>';
         tableEl.innerHTML = `<tr><td class="muted">No data.</td></tr>`;
-        ["adapterOutcomeChart", "adapterRootCauseChart", "adapterFailuresPerTraceChart"].forEach((k) => {
+        document.getElementById("adapterFunnelChart").innerHTML = "";
+        ["adapterRootCauseChart", "adapterFailuresPerTraceChart"].forEach((k) => {
           if (charts[k]) {
             charts[k].destroy();
             charts[k] = null;
@@ -1800,60 +1926,79 @@
         ? `<strong style="font-size:0.86rem;">Suggested triage queue (highest failure density first)</strong><ul>${priorityItems}</ul>`
         : '<span class="muted">No triage data.</span>';
 
-      const outcomeSeries = [
-        { key: "fixed", label: "fixed", color: "#76c893", value: story.outcomeCounts.fixed },
-        {
-          key: "partially_fixed",
-          label: "partially_fixed",
-          color: "#f2cc8f",
-          value: story.outcomeCounts.partially_fixed
-        },
-        { key: "unchanged", label: "unchanged", color: "#adb5bd", value: story.outcomeCounts.unchanged },
-        { key: "worse", label: "worse", color: "#e76f51", value: story.outcomeCounts.worse },
-        {
-          key: "not_attempted",
-          label: "not_attempted",
-          color: "#94a3b8",
-          value: story.outcomeCounts.not_attempted
-        }
-      ];
+      const oc = story.outcomeCounts;
+      const attempted = oc.fixed + oc.partially_fixed + oc.unchanged + oc.worse;
+      const notAttempted = oc.not_attempted;
+      const helped = oc.fixed + oc.partially_fixed;
 
-      rebuildChart("adapterOutcomeChart", document.getElementById("adapterOutcomeChart"), {
-        type: "bar",
-        data: {
-          labels: ["major failures"],
-          datasets: outcomeSeries.map((entry) => ({
-            label: `${entry.label} (${fmtPct(entry.value, totalFailures)})`,
-            data: [entry.value],
-            backgroundColor: entry.color,
-            borderWidth: 0
-          }))
-        },
-        options: {
-          indexAxis: "y",
-          responsive: true,
-          scales: {
-            x: {
-              beginAtZero: true,
-              stacked: true,
-              ticks: { precision: 0 },
-              title: { display: true, text: `count (total ${String(totalFailures)})` }
-            },
-            y: { stacked: true }
-          },
-          plugins: {
-            legend: { position: "bottom" },
-            tooltip: {
-              callbacks: {
-                label: (ctx) => {
-                  const value = Number(ctx.raw || 0);
-                  return `${ctx.dataset.label}: ${String(value)} of ${String(totalFailures)}`;
-                }
-              }
-            }
-          }
-        }
-      });
+      function funnelBar(width, color, label, count, total) {
+        const pct = fmtPct(count, total);
+        const w = total > 0 ? Math.max(((count / total) * 100), 3) : 0;
+        return `<div class="funnel-bar" style="width:${w}%;background:${color};"><span class="funnel-bar-text">${count} ${label} (${pct})</span></div>`;
+      }
+
+      const funnelEl = document.getElementById("adapterFunnelChart");
+      funnelEl.innerHTML = `
+        <div class="funnel">
+          <div class="funnel-row">
+            <div class="funnel-label">total failures</div>
+            <div class="funnel-bar-wrap">
+              <div class="funnel-bar" style="width:100%;background:#64748b;">
+                <span class="funnel-bar-text">${totalFailures} major failures across ${story.totalTraces} traces</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="funnel-connector-line"></div>
+
+          <div class="funnel-row">
+            <div class="funnel-label">attempted</div>
+            <div class="funnel-bar-wrap">
+              ${funnelBar(attempted, "#577590", "attempted", attempted, totalFailures)}
+            </div>
+          </div>
+
+          <div class="funnel-connector-line" style="margin-left:160px;"></div>
+          <div class="funnel-group-header" style="margin-left:160px;">of ${attempted} attempted</div>
+
+          <div class="funnel-row funnel-indent">
+            <div class="funnel-label">fixed</div>
+            <div class="funnel-bar-wrap">
+              ${funnelBar(oc.fixed, "#76c893", "", oc.fixed, attempted)}
+            </div>
+          </div>
+          <div class="funnel-row funnel-indent">
+            <div class="funnel-label">partially fixed</div>
+            <div class="funnel-bar-wrap">
+              ${funnelBar(oc.partially_fixed, "#f2cc8f", "", oc.partially_fixed, attempted)}
+            </div>
+          </div>
+          <div class="funnel-row funnel-indent">
+            <div class="funnel-label">unchanged</div>
+            <div class="funnel-bar-wrap">
+              ${funnelBar(oc.unchanged, "#adb5bd", "", oc.unchanged, attempted)}
+            </div>
+          </div>
+          <div class="funnel-row funnel-indent">
+            <div class="funnel-label">worse</div>
+            <div class="funnel-bar-wrap">
+              ${funnelBar(oc.worse, "#e76f51", "", oc.worse, attempted)}
+            </div>
+          </div>
+
+          <div class="funnel-connector-line"></div>
+
+          <div class="funnel-row">
+            <div class="funnel-label">not attempted</div>
+            <div class="funnel-bar-wrap">
+              ${funnelBar(notAttempted, "#94a3b8", "not attempted", notAttempted, totalFailures)}
+            </div>
+          </div>
+
+          <div class="funnel-connector-line"></div>
+          <div class="funnel-group-header">net effect: helped ${helped} (${fmtPct(helped, totalFailures)}), hurt ${oc.worse} (${fmtPct(oc.worse, totalFailures)}), missed ${notAttempted} (${fmtPct(notAttempted, totalFailures)})</div>
+        </div>
+      `;
 
       const rootRows = [
         { key: "api", label: "api", color: "#43aa8b", value: story.rootCauseCounts.api },
@@ -1888,7 +2033,86 @@
         }
       });
 
+      const usefulnessHist = story.usefulnessHist;
+      const uhColors = usefulnessHist.map((b) => {
+        const v = parseFloat(b.label);
+        if (v < -0.001) return "#e76f51";
+        if (v > 0.001) return "#76c893";
+        return "#adb5bd";
+      });
+      rebuildChart("adapterUsefulnessHistChart", document.getElementById("adapterUsefulnessHistChart"), {
+        type: "bar",
+        data: {
+          labels: usefulnessHist.map((b) => b.label),
+          datasets: [
+            {
+              label: "# traces",
+              data: usefulnessHist.map((b) => b.count),
+              backgroundColor: uhColors
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: "traces" } },
+            x: { title: { display: true, text: "usefulness score" } }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => `${String(ctx.raw)} traces (${fmtPct(ctx.raw, story.totalTraces)})`
+              }
+            }
+          }
+        }
+      });
+
+      const fvrData = story.failuresVsReward;
+      rebuildChart("adapterFailuresVsRewardChart", document.getElementById("adapterFailuresVsRewardChart"), {
+        type: "scatter",
+        data: {
+          datasets: [
+            {
+              label: "trace",
+              data: fvrData,
+              backgroundColor: fvrData.map((d) => d.y >= 0 ? "rgba(118,200,147,0.6)" : "rgba(231,111,81,0.6)"),
+              pointRadius: 5,
+              pointHoverRadius: 7
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: "major failures" } },
+            y: { min: -1.1, max: 1.1, title: { display: true, text: "usefulness score" } }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  const d = fvrData[ctx.dataIndex];
+                  return `task ${d.taskId} trial ${d.trial}: ${d.x} failures, usefulness ${fmtShort(d.y, 2)}`;
+                }
+              }
+            }
+          }
+        }
+      });
+
       const failureBuckets = story.failureBuckets;
+      const fbColors = failureBuckets.map((b) => {
+        const v = parseInt(b.label, 10);
+        if (isNaN(v)) return "#c15f3c";
+        const t = Math.min(v / 9, 1);
+        const r = Math.round(215 + t * (193 - 215));
+        const g = Math.round(223 + t * (95 - 223));
+        const b2 = Math.round(226 + t * (60 - 226));
+        return `rgb(${r},${g},${b2})`;
+      });
       rebuildChart("adapterFailuresPerTraceChart", document.getElementById("adapterFailuresPerTraceChart"), {
         type: "bar",
         data: {
@@ -1897,7 +2121,7 @@
             {
               label: "# traces",
               data: failureBuckets.map((b) => b.count),
-              backgroundColor: ["#d7dfe2", "#bddcd3", "#a2d0c0", "#85c3ae", "#e7bd93", "#c15f3c"]
+              backgroundColor: fbColors
             }
           ]
         },
@@ -2860,6 +3084,41 @@
       });
     }
 
+    async function loadAdapterExamples() {
+      const el = document.getElementById("adapter-usefulness-examples");
+      const EXAMPLES_FILES = [
+        "adapter_usefulness_examples.md",
+        "./adapter_usefulness_examples.md",
+        "/notes/adapter_usefulness_examples.md"
+      ];
+      let md = null;
+      for (const path of EXAMPLES_FILES) {
+        try {
+          const res = await fetch(path, { cache: "no-store" });
+          if (!res.ok) continue;
+          md = await res.text();
+          break;
+        } catch { /* try next */ }
+      }
+      if (!md) {
+        el.innerHTML = '<span class="muted">Could not load adapter_usefulness_examples.md</span>';
+        return;
+      }
+      // minimal markdown -> HTML conversion
+      const html = md
+        .replace(/^### (.+)$/gm, '<h4 style="margin:16px 0 4px; padding-top:10px; border-top:1px solid var(--border);">$1</h4>')
+        .replace(/^## (.+)$/gm, '<h3 style="margin:18px 0 6px;">$1</h3>')
+        .replace(/^# (.+)$/gm, '<h2 style="margin:12px 0 8px;">$1</h2>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/^- (.+)$/gm, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>\n?)+/gs, (m) => `<ul style="margin:4px 0 8px; padding-left:18px;">${m}</ul>`)
+        .replace(/^---$/gm, '<hr style="border:none; border-top:1px solid var(--border); margin:14px 0;">')
+        .replace(/\n\n/g, '<br><br>')
+        .replace(/\n(?!<)/g, ' ');
+      el.innerHTML = html;
+    }
+
     async function main() {
       try {
         const loaded = [];
@@ -2896,6 +3155,7 @@
         renderInsights(stats);
         renderCharts(stats);
         renderAdapterUsefulnessSection();
+        loadAdapterExamples();
         initTraceExplorer(traces);
         initCopilot();
         setStatus("Loaded successfully.");
