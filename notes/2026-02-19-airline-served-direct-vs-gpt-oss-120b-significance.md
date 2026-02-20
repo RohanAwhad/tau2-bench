@@ -28,7 +28,7 @@ Conclusion: no statistically significant difference at typical thresholds (all p
 ## Update: served-adapter prod run (latest)
 
 - New run:
-  - `data/simulations/served_adapter_agent_user_120b_airline_full_3trials_20260219_prod_mc50.json`
+  - `data/simulations/served_adapter_agent_user_120b_airline_full_3trials_20260219_prod_mc50_99262e9f3c35e9ba77804451bddd8746f3fd2541.json`
 - Common setup retained: `airline`, `50` tasks, `3` trials per task.
 
 - served-adapter (`agent=served-adapter`, `user=gpt-oss-120b`):
