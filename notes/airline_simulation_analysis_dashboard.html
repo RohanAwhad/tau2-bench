@@ -420,6 +420,11 @@
       padding: 10px;
     }
 
+    .trace-detail-col .copilot-panel {
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+
     .copilot-head {
       display: flex;
       align-items: center;
@@ -665,20 +670,6 @@
         </div>
 
         <div class="trace-detail-col">
-          <div class="detail-controls">
-            <div>
-              <label for="trace-msg-search">In-trace search</label>
-              <input id="trace-msg-search" type="text" placeholder="search inside selected trace..." />
-            </div>
-            <label class="inline-checkbox" for="trace-tool-only">
-              <input id="trace-tool-only" type="checkbox" />
-              tool-only messages
-            </label>
-            <button id="trace-clear-view-filters" type="button">Clear message filters</button>
-          </div>
-
-          <div id="trace-detail" class="trace-detail muted">Pick a trace row to view details.</div>
-
           <div class="copilot-panel">
             <div class="copilot-head">
               <span>Trace Copilot</span>
@@ -702,6 +693,20 @@
             </div>
             <div id="copilot-status" class="copilot-sub"></div>
           </div>
+
+          <div class="detail-controls">
+            <div>
+              <label for="trace-msg-search">In-trace search</label>
+              <input id="trace-msg-search" type="text" placeholder="search inside selected trace..." />
+            </div>
+            <label class="inline-checkbox" for="trace-tool-only">
+              <input id="trace-tool-only" type="checkbox" />
+              tool-only messages
+            </label>
+            <button id="trace-clear-view-filters" type="button">Clear message filters</button>
+          </div>
+
+          <div id="trace-detail" class="trace-detail muted">Pick a trace row to view details.</div>
         </div>
       </div>
     </div>
