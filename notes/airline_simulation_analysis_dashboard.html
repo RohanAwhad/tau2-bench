@@ -1,0 +1,1441 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Airline Benchmark Analysis Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #f7f7f5;
+      --card: #ffffff;
+      --ink: #1f2a2e;
+      --muted: #6e777b;
+      --accent-1: #1f8a70;
+      --accent-2: #c15f3c;
+      --border: #d7dcde;
+      --soft: #f4f8f7;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: ui-sans-serif, -apple-system, Segoe UI, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 0% 0%, #eef4f3, var(--bg) 40%);
+      color: var(--ink);
+    }
+
+    .wrap {
+      max-width: 1280px;
+      margin: 24px auto;
+      padding: 0 16px 24px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.6rem;
+    }
+
+    p,
+    li,
+    td,
+    th,
+    label,
+    input,
+    select,
+    button {
+      font-size: 0.93rem;
+      line-height: 1.45;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-top: 14px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+      gap: 14px;
+    }
+
+    canvas {
+      width: 100%;
+      height: 310px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      padding: 7px 6px;
+      vertical-align: top;
+    }
+
+    th {
+      font-weight: 600;
+      background: #f7faf8;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    code {
+      background: #eff3f4;
+      border: 1px solid #dfe6e8;
+      border-radius: 6px;
+      padding: 1px 5px;
+    }
+
+    .chip {
+      display: inline-block;
+      margin-right: 8px;
+      margin-bottom: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #eff6f5;
+      border: 1px solid #dce8e5;
+      font-size: 0.82rem;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+      margin-bottom: 10px;
+    }
+
+    .controls label {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    input,
+    select,
+    button {
+      width: 100%;
+      padding: 7px 8px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    button {
+      cursor: pointer;
+      background: var(--soft);
+      font-weight: 600;
+    }
+
+    .trace-layout {
+      display: grid;
+      grid-template-columns: minmax(360px, 430px) 1fr;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    @media (max-width: 1020px) {
+      .trace-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .trace-table-wrap {
+      max-height: 430px;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-top: 8px;
+      background: #fff;
+    }
+
+    .trace-row {
+      cursor: pointer;
+    }
+
+    .trace-row:hover {
+      background: #f1f8f6;
+    }
+
+    .trace-row.active {
+      background: #e2f3ee;
+    }
+
+    .pager {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .pager button {
+      width: auto;
+      min-width: 90px;
+    }
+
+    .detail-controls {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 10px;
+      align-items: end;
+      margin-top: 2px;
+      margin-bottom: 8px;
+    }
+
+    @media (max-width: 760px) {
+      .detail-controls {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .inline-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 36px;
+      margin-top: 24px;
+      color: var(--ink);
+    }
+
+    .inline-checkbox input {
+      width: auto;
+      margin: 0;
+    }
+
+    .trace-detail {
+      margin-top: 8px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      background: #fafdfc;
+      min-height: 300px;
+    }
+
+    .chat-thread {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .turn-row {
+      display: flex;
+      width: 100%;
+    }
+
+    .turn-row.role-user {
+      justify-content: flex-end;
+    }
+
+    .turn-row.role-assistant,
+    .turn-row.role-tool,
+    .turn-row.role-other {
+      justify-content: flex-start;
+    }
+
+    .bubble {
+      width: min(100%, 860px);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 9px 10px;
+      background: #fff;
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
+    }
+
+    .role-user .bubble {
+      background: #e9f4ff;
+      border-color: #c5def6;
+      width: min(100%, 760px);
+    }
+
+    .role-assistant .bubble {
+      background: #f3f9f4;
+      border-color: #cfe2d2;
+    }
+
+    .role-tool .bubble {
+      background: #f7f2ff;
+      border-color: #dfd4ef;
+    }
+
+    .turn-meta {
+      font-size: 0.79rem;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+
+    .tool-call-block {
+      margin-top: 8px;
+      border: 1px solid #d2d8dd;
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .tool-call-block summary {
+      cursor: pointer;
+      font-weight: 600;
+      padding: 6px 8px;
+    }
+
+    .tool-call-body {
+      padding: 0 8px 8px;
+    }
+
+    .result-chip {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 999px;
+      border: 1px solid #d6dde0;
+      font-size: 0.78rem;
+      margin-left: 6px;
+      color: #345;
+      background: #f3f6f7;
+    }
+
+    .result-chip.error {
+      border-color: #efc0ba;
+      background: #fff1ef;
+      color: #a13f32;
+    }
+
+    .intermediate-block {
+      margin-top: 8px;
+      border: 1px dashed #c8d5d8;
+      border-radius: 8px;
+      background: #fcfefe;
+      padding: 0 8px 8px;
+    }
+
+    .intermediate-block summary {
+      cursor: pointer;
+      font-weight: 600;
+      padding: 6px 0;
+    }
+
+    .assert-panel {
+      margin-top: 10px;
+      border: 1px solid #eed9bc;
+      background: #fff8ee;
+      border-radius: 10px;
+      padding: 8px;
+    }
+
+    .assert-title {
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .assert-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 5px 0;
+      border-top: 1px solid #f2e4d2;
+    }
+
+    .assert-item:first-of-type {
+      border-top: none;
+    }
+
+    .jump-btn {
+      width: auto;
+      min-width: 70px;
+      padding: 5px 8px;
+      background: #f7ecde;
+      border-color: #e9d5bc;
+    }
+
+    .turn-row.focus-hit .bubble {
+      box-shadow: 0 0 0 3px #f8cd7f;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      overflow-wrap: anywhere;
+      font-size: 0.83rem;
+      background: #f3f6f7;
+      border: 1px solid #dfe6e8;
+      border-radius: 6px;
+      padding: 8px;
+      margin-top: 8px;
+      margin-bottom: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Airline Benchmark Analysis</h1>
+    <p class="muted">
+      Focused comparison: <code>served-direct</code> vs <code>served-adapter</code>.
+      If local fetch fails, run from repo root:
+      <code>python3 -m http.server 8001</code>
+      then open
+      <code>http://localhost:8001/notes/airline_simulation_analysis_dashboard.html</code>.
+    </p>
+
+    <div class="card">
+      <strong>Run files loaded</strong>
+      <ul id="run-files"></ul>
+      <div id="status" class="muted">Loading...</div>
+    </div>
+
+    <div class="card">
+      <strong>Auto analysis</strong>
+      <ul id="insights"></ul>
+    </div>
+
+    <div class="card">
+      <strong>Headline metrics</strong>
+      <table id="metrics-table"></table>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <strong>Pass^k by model</strong>
+        <canvas id="passHatChart"></canvas>
+      </div>
+      <div class="card">
+        <strong>Pass@k by model</strong>
+        <canvas id="passAtChart"></canvas>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <strong>Task stability (successes out of 3)</strong>
+        <canvas id="distChart"></canvas>
+      </div>
+      <div class="card">
+        <strong>Duration histogram (seconds)</strong>
+        <canvas id="durationChart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <strong>Trace explorer</strong>
+      <div class="muted">All traces listed by task id. Click a row to inspect full message trace.</div>
+
+      <div class="controls">
+        <div>
+          <label for="trace-model">Model</label>
+          <select id="trace-model"></select>
+        </div>
+        <div>
+          <label for="trace-task">Task ID</label>
+          <select id="trace-task"></select>
+        </div>
+        <div>
+          <label for="trace-trial">Trial</label>
+          <select id="trace-trial"></select>
+        </div>
+        <div>
+          <label for="trace-reward">Reward</label>
+          <select id="trace-reward">
+            <option value="all">all</option>
+            <option value="pass">pass</option>
+            <option value="fail">fail</option>
+          </select>
+        </div>
+        <div>
+          <label for="trace-term">Termination</label>
+          <select id="trace-term"></select>
+        </div>
+        <div>
+          <label for="trace-has-tools">Tools</label>
+          <select id="trace-has-tools">
+            <option value="all">all</option>
+            <option value="with_tools">with tools</option>
+            <option value="without_tools">without tools</option>
+          </select>
+        </div>
+        <div>
+          <label for="trace-assert-filter">Assertions</label>
+          <select id="trace-assert-filter">
+            <option value="all">all</option>
+            <option value="failed_only">failed assertions only</option>
+          </select>
+        </div>
+        <div>
+          <label for="trace-sort">Sort</label>
+          <select id="trace-sort">
+            <option value="task_asc">task id asc</option>
+            <option value="task_desc">task id desc</option>
+            <option value="duration_desc">duration desc</option>
+            <option value="duration_asc">duration asc</option>
+          </select>
+        </div>
+        <div>
+          <label for="trace-page-size">Rows per page</label>
+          <select id="trace-page-size">
+            <option value="15">15</option>
+            <option value="30" selected>30</option>
+            <option value="60">60</option>
+          </select>
+        </div>
+        <div>
+          <label for="trace-search">Search</label>
+          <input id="trace-search" type="text" placeholder="search content, tool name, args..." />
+        </div>
+        <div>
+          <label>&nbsp;</label>
+          <button id="trace-reset" type="button">Reset filters</button>
+        </div>
+      </div>
+
+      <div id="trace-count" class="muted"></div>
+
+      <div class="trace-layout">
+        <div>
+          <div class="trace-table-wrap">
+            <table id="trace-table"></table>
+          </div>
+
+          <div class="pager">
+            <button id="trace-prev" type="button">Prev</button>
+            <button id="trace-next" type="button">Next</button>
+            <span id="trace-page-info" class="muted"></span>
+          </div>
+        </div>
+
+        <div>
+          <div class="detail-controls">
+            <div>
+              <label for="trace-msg-search">In-trace search</label>
+              <input id="trace-msg-search" type="text" placeholder="search inside selected trace..." />
+            </div>
+            <label class="inline-checkbox" for="trace-tool-only">
+              <input id="trace-tool-only" type="checkbox" />
+              tool-only messages
+            </label>
+            <button id="trace-clear-view-filters" type="button">Clear message filters</button>
+          </div>
+
+          <div id="trace-detail" class="trace-detail muted">Pick a trace row to view details.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const RUNS = [
+      {
+        key: "served_direct",
+        label: "served-direct",
+        color: "#1f8a70",
+        files: [
+          "../data/simulations/served_direct_agent_user_120b_airline_full_3trials_20260219.json",
+          "/data/simulations/served_direct_agent_user_120b_airline_full_3trials_20260219.json"
+        ]
+      },
+      {
+        key: "served_adapter",
+        label: "served-adapter",
+        color: "#c15f3c",
+        files: [
+          "../data/simulations/served_adapter_agent_user_120b_airline_full_3trials_20260219_postfix1_mc50.json",
+          "/data/simulations/served_adapter_agent_user_120b_airline_full_3trials_20260219_postfix1_mc50.json"
+        ]
+      }
+    ];
+
+    const charts = {};
+    const traceState = {
+      all: [],
+      filtered: [],
+      page: 1,
+      pageSize: 30,
+      selectedUid: null
+    };
+
+    function comb(n, k) {
+      if (k < 0 || k > n) return 0;
+      if (k === 0 || k === n) return 1;
+      let out = 1;
+      for (let i = 1; i <= k; i++) out = (out * (n - (k - i))) / i;
+      return out;
+    }
+
+    function mean(arr) {
+      return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+    }
+
+    function quantile(arr, q) {
+      if (!arr.length) return 0;
+      const sorted = [...arr].sort((a, b) => a - b);
+      const idx = (sorted.length - 1) * q;
+      const lo = Math.floor(idx);
+      const hi = Math.ceil(idx);
+      if (lo === hi) return sorted[lo];
+      return sorted[lo] * (hi - idx) + sorted[hi] * (idx - lo);
+    }
+
+    function fmt(x) {
+      return Number(x).toFixed(4);
+    }
+
+    function esc(s) {
+      return String(s)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    async function fetchJsonWithFallback(paths) {
+      let lastError = null;
+      for (const path of paths) {
+        try {
+          const res = await fetch(path, { cache: "no-store" });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const json = await res.json();
+          return { json, loadedFrom: path };
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      throw lastError;
+    }
+
+    function safeJson(value) {
+      if (value == null) return "";
+      if (typeof value === "string") return value;
+      try {
+        return JSON.stringify(value, null, 2);
+      } catch {
+        return String(value);
+      }
+    }
+
+    function normalizeForCompare(value) {
+      if (Array.isArray(value)) return value.map(normalizeForCompare);
+      if (value && typeof value === "object") {
+        const out = {};
+        Object.keys(value)
+          .sort()
+          .forEach((k) => {
+            out[k] = normalizeForCompare(value[k]);
+          });
+        return out;
+      }
+      return value;
+    }
+
+    function deepEqualJson(a, b) {
+      return JSON.stringify(normalizeForCompare(a)) === JSON.stringify(normalizeForCompare(b));
+    }
+
+    function escapeRegExp(s) {
+      return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    function highlightText(text, query) {
+      const safe = esc(text);
+      if (!query) return safe;
+      const pattern = new RegExp(escapeRegExp(query), "ig");
+      return safe.replace(pattern, (m) => `<mark>${m}</mark>`);
+    }
+
+    function extractIntermediate(message) {
+      const intermediate =
+        message?.raw_data?.completion_metadata?.adapter_critic?.intermediate ||
+        message?.raw_data?.adapter_critic?.intermediate;
+      if (!intermediate || typeof intermediate !== "object") return null;
+
+      const out = {};
+      ["api_draft", "adapter", "final"].forEach((k) => {
+        const v = intermediate[k];
+        if (v == null) return;
+        const text = typeof v === "string" ? v : safeJson(v);
+        if (text.trim() !== "") out[k] = text;
+      });
+      return Object.keys(out).length ? out : null;
+    }
+
+    function hasToolsInMessages(messages) {
+      return messages.some(
+        (m) => (Array.isArray(m.tool_calls) && m.tool_calls.length > 0) || m.role === "tool"
+      );
+    }
+
+    function extractFailedAssertions(rewardInfo) {
+      const failed = [];
+      if (!rewardInfo || typeof rewardInfo !== "object") return failed;
+
+      if (rewardInfo?.db_check?.db_match === false) {
+        failed.push({
+          type: "db",
+          label: "DB check mismatch"
+        });
+      }
+
+      const actionChecks = Array.isArray(rewardInfo.action_checks) ? rewardInfo.action_checks : [];
+      actionChecks.forEach((c) => {
+        if (c?.action_match === false) {
+          failed.push({
+            type: "action",
+            label: `Action mismatch: ${c?.action?.name || "unknown"}`,
+            name: c?.action?.name || null,
+            arguments: c?.action?.arguments || null,
+            actionId: c?.action?.action_id || null
+          });
+        }
+      });
+
+      return failed;
+    }
+
+    function toTraceSearchBlob(sim) {
+      const parts = [String(sim.task_id), String(sim.trial), String(sim.termination_reason || "")];
+      const msgs = sim.messages || [];
+      for (const m of msgs) {
+        parts.push(String(m.role || ""));
+        if (typeof m.content === "string") {
+          parts.push(m.content);
+        } else if (m.content != null) {
+          parts.push(safeJson(m.content));
+        }
+        if (Array.isArray(m.tool_calls)) {
+          for (const tc of m.tool_calls) {
+            parts.push(String(tc?.name || tc?.function?.name || ""));
+            const args = tc?.arguments ?? tc?.function?.arguments;
+            if (args != null) parts.push(typeof args === "string" ? args : safeJson(args));
+          }
+        }
+        if (m.role === "tool") {
+          parts.push(String(m.id || ""));
+          parts.push(String(m.error || ""));
+        }
+        const intermediate = extractIntermediate(m);
+        if (intermediate) parts.push(safeJson(intermediate));
+      }
+
+      const failed = extractFailedAssertions(sim.reward_info || {});
+      failed.forEach((f) => {
+        parts.push(String(f.label || ""));
+        if (f.name) parts.push(String(f.name));
+        if (f.arguments) parts.push(safeJson(f.arguments));
+      });
+
+      return parts.join(" ").toLowerCase();
+    }
+
+    function getToolResultById(messages) {
+      const map = new Map();
+      messages.forEach((m) => {
+        if (m.role === "tool" && m.id) {
+          map.set(String(m.id), m);
+        }
+      });
+      return map;
+    }
+
+    function messageBlobForFilter(message, toolResultById) {
+      const parts = [String(message.role || "")];
+      if (typeof message.content === "string") parts.push(message.content);
+      else if (message.content != null) parts.push(safeJson(message.content));
+
+      if (Array.isArray(message.tool_calls)) {
+        message.tool_calls.forEach((tc) => {
+          parts.push(String(tc?.name || tc?.function?.name || ""));
+          const args = tc?.arguments ?? tc?.function?.arguments;
+          if (args != null) parts.push(typeof args === "string" ? args : safeJson(args));
+          const toolId = tc?.id;
+          if (toolId && toolResultById.has(String(toolId))) {
+            parts.push(String(toolResultById.get(String(toolId)).content || ""));
+          }
+        });
+      }
+
+      if (message.role === "tool") {
+        parts.push(String(message.id || ""));
+      }
+
+      const intermediate = extractIntermediate(message);
+      if (intermediate) parts.push(safeJson(intermediate));
+
+      return parts.join(" ").toLowerCase();
+    }
+
+    function isToolRelatedMessage(message) {
+      return message.role === "tool" || (Array.isArray(message.tool_calls) && message.tool_calls.length > 0);
+    }
+
+    function findMessageIndexForAssertion(messages, assertion) {
+      if (assertion.type !== "action" || !assertion.name) return null;
+      let nameOnly = null;
+
+      for (let i = 0; i < messages.length; i++) {
+        const m = messages[i];
+        if (!Array.isArray(m.tool_calls)) continue;
+        for (const tc of m.tool_calls) {
+          const name = tc?.name || tc?.function?.name;
+          if (name !== assertion.name) continue;
+
+          if (nameOnly == null) nameOnly = i;
+          const args = tc?.arguments ?? tc?.function?.arguments;
+          if (assertion.arguments != null && deepEqualJson(args || {}, assertion.arguments || {})) {
+            return i;
+          }
+        }
+      }
+
+      return nameOnly;
+    }
+
+    function buildStats(run, json) {
+      const sims = json.simulations || [];
+      const byTask = new Map();
+      const durations = [];
+      const rewards = [];
+      const termCounts = new Map();
+
+      for (const sim of sims) {
+        const taskId = String(sim.task_id);
+        const reward = Number(sim.reward_info?.reward ?? 0);
+        const success = reward === 1 ? 1 : 0;
+        if (!byTask.has(taskId)) byTask.set(taskId, []);
+        byTask.get(taskId).push(success);
+        rewards.push(reward);
+        durations.push(Number(sim.duration ?? 0));
+        const term = sim.termination_reason || "unknown";
+        termCounts.set(term, (termCounts.get(term) || 0) + 1);
+      }
+
+      const taskIds = [...byTask.keys()].sort((a, b) => Number(a) - Number(b));
+      const nTrials = taskIds.length ? Math.max(...taskIds.map((id) => byTask.get(id).length)) : 0;
+      const successCounts = taskIds.map((id) => byTask.get(id).reduce((a, b) => a + b, 0));
+
+      const passHat = {};
+      const passAt = {};
+      for (let k = 1; k <= Math.min(3, nTrials); k++) {
+        passHat[k] = mean(successCounts.map((c) => (c >= k ? comb(c, k) / comb(nTrials, k) : 0)));
+        passAt[k] = mean(
+          successCounts.map((c) => {
+            const fails = nTrials - c;
+            const missAll = fails >= k ? comb(fails, k) / comb(nTrials, k) : 0;
+            return 1 - missAll;
+          })
+        );
+      }
+
+      const successDist = Array(nTrials + 1).fill(0);
+      for (const c of successCounts) successDist[c] += 1;
+
+      const traces = sims.map((sim, idx) => {
+        const reward = Number(sim.reward_info?.reward ?? 0);
+        const taskId = String(sim.task_id);
+        const trial = Number(sim.trial ?? -1);
+        const uid = `${run.key}:${taskId}:${trial}:${sim.id || idx}`;
+        const messages = sim.messages || [];
+        const failedAssertions = extractFailedAssertions(sim.reward_info || {});
+        const hasTools = hasToolsInMessages(messages);
+
+        return {
+          uid,
+          modelKey: run.key,
+          modelLabel: run.label,
+          modelColor: run.color,
+          taskId,
+          taskIdNum: Number(taskId),
+          trial,
+          reward,
+          outcome: reward === 1 ? "pass" : "fail",
+          termination: sim.termination_reason || "unknown",
+          duration: Number(sim.duration || 0),
+          messages,
+          nMessages: messages.length,
+          assistantTurns: messages.filter((m) => m.role === "assistant").length,
+          hasTools,
+          failedAssertions,
+          rewardInfo: sim.reward_info || null,
+          searchBlob: toTraceSearchBlob(sim)
+        };
+      });
+
+      return {
+        key: run.key,
+        label: run.label,
+        color: run.color,
+        nSims: sims.length,
+        nTasks: taskIds.length,
+        nTrials,
+        avgReward: mean(rewards),
+        passHat,
+        passAt,
+        successDist,
+        durations,
+        termCounts,
+        durationStats: {
+          p50: quantile(durations, 0.5),
+          p90: quantile(durations, 0.9),
+          mean: mean(durations)
+        },
+        traces
+      };
+    }
+
+    function setStatus(text) {
+      document.getElementById("status").textContent = text;
+    }
+
+    function renderRunFiles(loadedRuns) {
+      const ul = document.getElementById("run-files");
+      ul.innerHTML = "";
+      loadedRuns.forEach((x) => {
+        const li = document.createElement("li");
+        li.innerHTML = `<span class="chip">${x.label}</span><code>${x.path}</code>`;
+        ul.appendChild(li);
+      });
+    }
+
+    function renderMetricsTable(stats) {
+      const el = document.getElementById("metrics-table");
+      const header = `
+        <tr>
+          <th>Model</th>
+          <th>avg reward</th>
+          <th>pass^1</th>
+          <th>pass^2</th>
+          <th>pass^3</th>
+          <th>pass@1</th>
+          <th>pass@2</th>
+          <th>pass@3</th>
+          <th>p50 dur (s)</th>
+          <th>non-user-stop</th>
+        </tr>
+      `;
+      const rows = stats
+        .map((s) => {
+          const nonUserStop = [...s.termCounts.entries()]
+            .filter(([k]) => k !== "user_stop")
+            .reduce((a, [, v]) => a + v, 0);
+          return `
+            <tr>
+              <td>${s.label}</td>
+              <td>${fmt(s.avgReward)}</td>
+              <td>${fmt(s.passHat[1])}</td>
+              <td>${fmt(s.passHat[2])}</td>
+              <td>${fmt(s.passHat[3])}</td>
+              <td>${fmt(s.passAt[1])}</td>
+              <td>${fmt(s.passAt[2])}</td>
+              <td>${fmt(s.passAt[3])}</td>
+              <td>${fmt(s.durationStats.p50)}</td>
+              <td>${nonUserStop}</td>
+            </tr>
+          `;
+        })
+        .join("");
+      el.innerHTML = header + rows;
+    }
+
+    function renderInsights(stats) {
+      const sd = stats.find((x) => x.key === "served_direct");
+      const sa = stats.find((x) => x.key === "served_adapter");
+      const byPass1 = [...stats].sort((a, b) => b.passHat[1] - a.passHat[1]);
+      const li = [];
+      li.push(`Ranking by pass^1: ${byPass1.map((x) => `${x.label} (${fmt(x.passHat[1])})`).join(" > ")}.`);
+      if (sd && sa) {
+        li.push(
+          `served-adapter vs served-direct: pass^1 ${fmt(sa.passHat[1] - sd.passHat[1])}, pass^2 ${fmt(
+            sa.passHat[2] - sd.passHat[2]
+          )}, pass^3 ${fmt(sa.passHat[3] - sd.passHat[3])}.`
+        );
+        li.push(
+          `served-adapter vs served-direct pass@k deltas: @1 ${fmt(sa.passAt[1] - sd.passAt[1])}, @2 ${fmt(
+            sa.passAt[2] - sd.passAt[2]
+          )}, @3 ${fmt(sa.passAt[3] - sd.passAt[3])}.`
+        );
+      }
+      li.push("Interpretation reminder: pass^k measures consistency, pass@k measures retry hit probability.");
+      li.push("Trace explorer now supports tool-only view, assertion jumps, and adapter intermediate drafts.");
+      document.getElementById("insights").innerHTML = li.map((x) => `<li>${x}</li>`).join("");
+    }
+
+    function rebuildChart(key, element, cfg) {
+      if (charts[key]) charts[key].destroy();
+      charts[key] = new Chart(element, cfg);
+    }
+
+    function renderCharts(stats) {
+      const ks = ["1", "2", "3"];
+
+      rebuildChart("passHatChart", document.getElementById("passHatChart"), {
+        type: "bar",
+        data: {
+          labels: ks.map((k) => `k=${k}`),
+          datasets: stats.map((s) => ({
+            label: s.label,
+            data: ks.map((k) => s.passHat[k]),
+            backgroundColor: s.color
+          }))
+        },
+        options: { responsive: true, scales: { y: { min: 0, max: 1 } } }
+      });
+
+      rebuildChart("passAtChart", document.getElementById("passAtChart"), {
+        type: "bar",
+        data: {
+          labels: ks.map((k) => `k=${k}`),
+          datasets: stats.map((s) => ({
+            label: s.label,
+            data: ks.map((k) => s.passAt[k]),
+            backgroundColor: s.color
+          }))
+        },
+        options: { responsive: true, scales: { y: { min: 0, max: 1 } } }
+      });
+
+      rebuildChart("distChart", document.getElementById("distChart"), {
+        type: "bar",
+        data: {
+          labels: ["0", "1", "2", "3"].map((x) => `${x} successes`),
+          datasets: stats.map((s) => ({
+            label: s.label,
+            data: s.successDist,
+            backgroundColor: s.color
+          }))
+        },
+        options: {
+          responsive: true,
+          scales: { y: { beginAtZero: true, title: { display: true, text: "#tasks" } } }
+        }
+      });
+
+      const bins = [30, 60, 90, 120, 180];
+      const binLabels = ["0-30", "30-60", "60-90", "90-120", "120-180", "180+"];
+      const hist = (vals) => {
+        const out = Array(binLabels.length).fill(0);
+        vals.forEach((v) => {
+          let idx = bins.findIndex((b) => v < b);
+          if (idx === -1) idx = out.length - 1;
+          out[idx] += 1;
+        });
+        return out;
+      };
+
+      rebuildChart("durationChart", document.getElementById("durationChart"), {
+        type: "bar",
+        data: {
+          labels: binLabels,
+          datasets: stats.map((s) => ({
+            label: s.label,
+            data: hist(s.durations),
+            backgroundColor: s.color
+          }))
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: { beginAtZero: true, title: { display: true, text: "#simulations" } },
+            x: { title: { display: true, text: "duration bin (seconds)" } }
+          }
+        }
+      });
+    }
+
+    function populateTraceFilters(traces) {
+      const modelEl = document.getElementById("trace-model");
+      const taskEl = document.getElementById("trace-task");
+      const trialEl = document.getElementById("trace-trial");
+      const termEl = document.getElementById("trace-term");
+
+      const modelVals = [...new Set(traces.map((t) => t.modelKey))];
+      modelEl.innerHTML = `<option value="all">all</option>${modelVals
+        .map((v) => {
+          const label = RUNS.find((r) => r.key === v)?.label || v;
+          return `<option value="${esc(v)}">${esc(label)}</option>`;
+        })
+        .join("")}`;
+
+      const taskVals = [...new Set(traces.map((t) => t.taskId))].sort((a, b) => Number(a) - Number(b));
+      taskEl.innerHTML = `<option value="all">all</option>${taskVals
+        .map((v) => `<option value="${esc(v)}">${esc(v)}</option>`)
+        .join("")}`;
+
+      const trialVals = [...new Set(traces.map((t) => t.trial))].sort((a, b) => a - b);
+      trialEl.innerHTML = `<option value="all">all</option>${trialVals
+        .map((v) => `<option value="${String(v)}">${String(v)}</option>`)
+        .join("")}`;
+
+      const termVals = [...new Set(traces.map((t) => t.termination))].sort();
+      termEl.innerHTML = `<option value="all">all</option>${termVals
+        .map((v) => `<option value="${esc(v)}">${esc(v)}</option>`)
+        .join("")}`;
+    }
+
+    function applyTraceFilters(resetPage = true) {
+      const model = document.getElementById("trace-model").value;
+      const task = document.getElementById("trace-task").value;
+      const trial = document.getElementById("trace-trial").value;
+      const reward = document.getElementById("trace-reward").value;
+      const term = document.getElementById("trace-term").value;
+      const hasTools = document.getElementById("trace-has-tools").value;
+      const assertionFilter = document.getElementById("trace-assert-filter").value;
+      const search = document.getElementById("trace-search").value.trim().toLowerCase();
+      const sort = document.getElementById("trace-sort").value;
+      traceState.pageSize = Number(document.getElementById("trace-page-size").value);
+
+      let rows = traceState.all.filter((t) => {
+        if (model !== "all" && t.modelKey !== model) return false;
+        if (task !== "all" && t.taskId !== task) return false;
+        if (trial !== "all" && String(t.trial) !== trial) return false;
+        if (reward !== "all" && t.outcome !== reward) return false;
+        if (term !== "all" && t.termination !== term) return false;
+        if (hasTools === "with_tools" && !t.hasTools) return false;
+        if (hasTools === "without_tools" && t.hasTools) return false;
+        if (assertionFilter === "failed_only" && t.failedAssertions.length === 0) return false;
+        if (search && !t.searchBlob.includes(search)) return false;
+        return true;
+      });
+
+      rows.sort((a, b) => {
+        if (sort === "task_desc") {
+          return b.taskIdNum - a.taskIdNum || a.trial - b.trial || a.modelLabel.localeCompare(b.modelLabel);
+        }
+        if (sort === "duration_desc") {
+          return b.duration - a.duration || a.taskIdNum - b.taskIdNum;
+        }
+        if (sort === "duration_asc") {
+          return a.duration - b.duration || a.taskIdNum - b.taskIdNum;
+        }
+        return a.taskIdNum - b.taskIdNum || a.trial - b.trial || a.modelLabel.localeCompare(b.modelLabel);
+      });
+
+      traceState.filtered = rows;
+      if (resetPage) traceState.page = 1;
+      const maxPage = Math.max(1, Math.ceil(rows.length / traceState.pageSize));
+      if (traceState.page > maxPage) traceState.page = maxPage;
+
+      if (!rows.some((r) => r.uid === traceState.selectedUid)) {
+        traceState.selectedUid = rows.length ? rows[0].uid : null;
+      }
+
+      renderTraceTable();
+    }
+
+    function renderTraceTable() {
+      const tableEl = document.getElementById("trace-table");
+      const countEl = document.getElementById("trace-count");
+      const pageInfoEl = document.getElementById("trace-page-info");
+      const prevBtn = document.getElementById("trace-prev");
+      const nextBtn = document.getElementById("trace-next");
+
+      const total = traceState.filtered.length;
+      const pageSize = traceState.pageSize;
+      const maxPage = Math.max(1, Math.ceil(total / pageSize));
+      const start = (traceState.page - 1) * pageSize;
+      const end = Math.min(start + pageSize, total);
+      const rows = traceState.filtered.slice(start, end);
+
+      countEl.textContent = `Showing ${total === 0 ? 0 : start + 1}-${end} of ${total} traces.`;
+      pageInfoEl.textContent = `Page ${traceState.page} / ${maxPage}`;
+      prevBtn.disabled = traceState.page <= 1;
+      nextBtn.disabled = traceState.page >= maxPage;
+
+      const header = `
+        <tr>
+          <th>model</th>
+          <th>task</th>
+          <th>trial</th>
+          <th>reward</th>
+          <th>duration(s)</th>
+          <th>tools</th>
+          <th>failed assertions</th>
+        </tr>
+      `;
+
+      const body = rows
+        .map((t) => {
+          const cls = `trace-row${traceState.selectedUid === t.uid ? " active" : ""}`;
+          return `
+            <tr class="${cls}" data-trace-uid="${esc(t.uid)}">
+              <td>${esc(t.modelLabel)}</td>
+              <td>${esc(t.taskId)}</td>
+              <td>${String(t.trial)}</td>
+              <td>${t.reward === 1 ? "1.0" : "0.0"}</td>
+              <td>${t.duration.toFixed(2)}</td>
+              <td>${t.hasTools ? "yes" : "no"}</td>
+              <td>${String(t.failedAssertions.length)}</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      tableEl.innerHTML = header + body;
+
+      tableEl.querySelectorAll("[data-trace-uid]").forEach((row) => {
+        row.addEventListener("click", () => {
+          traceState.selectedUid = row.getAttribute("data-trace-uid");
+          renderTraceTable();
+          renderTraceDetail();
+        });
+      });
+
+      renderTraceDetail();
+    }
+
+    function jumpToMessage(index) {
+      const target = document.querySelector(`.turn-row[data-msg-index="${index}"]`);
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.classList.add("focus-hit");
+      setTimeout(() => target.classList.remove("focus-hit"), 1400);
+    }
+
+    function renderTraceDetail() {
+      const detailEl = document.getElementById("trace-detail");
+      const trace = traceState.filtered.find((t) => t.uid === traceState.selectedUid);
+      if (!trace) {
+        detailEl.classList.add("muted");
+        detailEl.textContent = "Pick a trace row to view details.";
+        return;
+      }
+
+      detailEl.classList.remove("muted");
+      const queryRaw = document.getElementById("trace-msg-search").value.trim();
+      const query = queryRaw.toLowerCase();
+      const toolOnly = document.getElementById("trace-tool-only").checked;
+      const toolResultById = getToolResultById(trace.messages);
+
+      const top = `
+        <div>
+          <span class="chip">${esc(trace.modelLabel)}</span>
+          <span class="chip">task ${esc(trace.taskId)}</span>
+          <span class="chip">trial ${String(trace.trial)}</span>
+          <span class="chip">reward ${trace.reward === 1 ? "1.0" : "0.0"}</span>
+          <span class="chip">termination ${esc(trace.termination)}</span>
+          <span class="chip">duration ${trace.duration.toFixed(2)}s</span>
+          <span class="chip">messages ${String(trace.nMessages)}</span>
+        </div>
+      `;
+
+      const failedAssertions = trace.failedAssertions.map((a) => ({
+        ...a,
+        jumpIndex: findMessageIndexForAssertion(trace.messages, a)
+      }));
+
+      const failedPanel = failedAssertions.length
+        ? `
+          <div class="assert-panel">
+            <div class="assert-title">Failed assertions (${failedAssertions.length})</div>
+            ${failedAssertions
+              .map((a, idx) => {
+                const label = a.type === "action"
+                  ? `${a.label}${a.arguments ? ` ${safeJson(a.arguments)}` : ""}`
+                  : a.label;
+                const jump = Number.isInteger(a.jumpIndex)
+                  ? `<button class="jump-btn" type="button" data-jump-index="${String(a.jumpIndex)}">Jump</button>`
+                  : `<span class="muted">no jump</span>`;
+                return `<div class="assert-item"><div>${esc(`${idx + 1}. ${label}`)}</div>${jump}</div>`;
+              })
+              .join("")}
+          </div>
+        `
+        : `<div class="muted" style="margin-top:8px;">No failed assertions in this trace.</div>`;
+
+      const visibleMessages = trace.messages
+        .map((m, i) => ({ m, i, blob: messageBlobForFilter(m, toolResultById) }))
+        .filter(({ m, blob }) => {
+          if (toolOnly && !isToolRelatedMessage(m)) return false;
+          if (query && !blob.includes(query)) return false;
+          return true;
+        });
+
+      const messageHtml = visibleMessages
+        .map(({ m, i }) => {
+          const role = m.role || "other";
+          const roleClass = role === "user" ? "role-user" : role === "assistant" ? "role-assistant" : role === "tool" ? "role-tool" : "role-other";
+          const roleLabel = role;
+
+          const content =
+            typeof m.content === "string"
+              ? m.content
+              : m.content == null
+                ? ""
+                : safeJson(m.content);
+
+          const contentHtml = content
+            ? `<pre>${highlightText(content, queryRaw)}</pre>`
+            : `<div class="muted">No text content.</div>`;
+
+          const toolCalls = Array.isArray(m.tool_calls) ? m.tool_calls : [];
+          const toolCallsHtml = toolCalls.length
+            ? toolCalls
+                .map((tc, tcIdx) => {
+                  const toolId = tc?.id ? String(tc.id) : "";
+                  const name = tc?.name || tc?.function?.name || "unknown_tool";
+                  const args = tc?.arguments ?? tc?.function?.arguments;
+                  const argsText = safeJson(args);
+
+                  const resultMsg = toolId ? toolResultById.get(toolId) : null;
+                  const resultText = resultMsg ? safeJson(resultMsg.content) : "No tool result message found.";
+                  const resultClass = resultMsg?.error ? "result-chip error" : "result-chip";
+                  const resultLabel = resultMsg ? (resultMsg.error ? "error" : "ok") : "missing";
+
+                  return `
+                    <details class="tool-call-block" ${tcIdx === 0 ? "open" : ""}>
+                      <summary>
+                        ${esc(`Tool call ${tcIdx + 1}: ${name}`)}
+                        <span class="${resultClass}">${esc(resultLabel)}</span>
+                      </summary>
+                      <div class="tool-call-body">
+                        <div class="muted">args</div>
+                        <pre>${highlightText(argsText, queryRaw)}</pre>
+                        <div class="muted">result</div>
+                        <pre>${highlightText(resultText, queryRaw)}</pre>
+                      </div>
+                    </details>
+                  `;
+                })
+                .join("")
+            : "";
+
+          const intermediate = extractIntermediate(m);
+          const intermediateHtml = intermediate
+            ? `
+              <details class="intermediate-block">
+                <summary>Intermediate drafts</summary>
+                ${intermediate.api_draft ? `<div class="muted">api_draft</div><pre>${highlightText(intermediate.api_draft, queryRaw)}</pre>` : ""}
+                ${intermediate.adapter ? `<div class="muted">adapter</div><pre>${highlightText(intermediate.adapter, queryRaw)}</pre>` : ""}
+                ${intermediate.final ? `<div class="muted">final</div><pre>${highlightText(intermediate.final, queryRaw)}</pre>` : ""}
+              </details>
+            `
+            : "";
+
+          return `
+            <div class="turn-row ${roleClass}" data-msg-index="${String(i)}">
+              <div class="bubble">
+                <div class="turn-meta">turn ${String(i)} · ${esc(roleLabel)}</div>
+                ${contentHtml}
+                ${toolCallsHtml}
+                ${intermediateHtml}
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+
+      const emptyMessage = '<div class="muted" style="margin-top:8px;">No messages match current in-trace filters.</div>';
+      detailEl.innerHTML = `${top}${failedPanel}<div class="chat-thread">${messageHtml || emptyMessage}</div>`;
+
+      detailEl.querySelectorAll("[data-jump-index]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const idx = Number(btn.getAttribute("data-jump-index"));
+          jumpToMessage(idx);
+        });
+      });
+    }
+
+    function initTraceExplorer(traces) {
+      traceState.all = traces;
+      traceState.filtered = traces;
+      traceState.page = 1;
+      traceState.pageSize = Number(document.getElementById("trace-page-size").value);
+      traceState.selectedUid = traces.length ? traces[0].uid : null;
+
+      populateTraceFilters(traces);
+      applyTraceFilters(true);
+
+      [
+        "trace-model",
+        "trace-task",
+        "trace-trial",
+        "trace-reward",
+        "trace-term",
+        "trace-has-tools",
+        "trace-assert-filter",
+        "trace-sort",
+        "trace-page-size"
+      ].forEach((id) => {
+        document.getElementById(id).addEventListener("change", () => applyTraceFilters(true));
+      });
+
+      document.getElementById("trace-search").addEventListener("input", () => applyTraceFilters(true));
+      document.getElementById("trace-msg-search").addEventListener("input", () => renderTraceDetail());
+      document.getElementById("trace-tool-only").addEventListener("change", () => renderTraceDetail());
+
+      document.getElementById("trace-prev").addEventListener("click", () => {
+        if (traceState.page > 1) {
+          traceState.page -= 1;
+          applyTraceFilters(false);
+        }
+      });
+
+      document.getElementById("trace-next").addEventListener("click", () => {
+        const maxPage = Math.max(1, Math.ceil(traceState.filtered.length / traceState.pageSize));
+        if (traceState.page < maxPage) {
+          traceState.page += 1;
+          applyTraceFilters(false);
+        }
+      });
+
+      document.getElementById("trace-clear-view-filters").addEventListener("click", () => {
+        document.getElementById("trace-msg-search").value = "";
+        document.getElementById("trace-tool-only").checked = false;
+        renderTraceDetail();
+      });
+
+      document.getElementById("trace-reset").addEventListener("click", () => {
+        document.getElementById("trace-model").value = "all";
+        document.getElementById("trace-task").value = "all";
+        document.getElementById("trace-trial").value = "all";
+        document.getElementById("trace-reward").value = "all";
+        document.getElementById("trace-term").value = "all";
+        document.getElementById("trace-has-tools").value = "all";
+        document.getElementById("trace-assert-filter").value = "all";
+        document.getElementById("trace-sort").value = "task_asc";
+        document.getElementById("trace-page-size").value = "30";
+        document.getElementById("trace-search").value = "";
+        document.getElementById("trace-msg-search").value = "";
+        document.getElementById("trace-tool-only").checked = false;
+        applyTraceFilters(true);
+      });
+    }
+
+    async function main() {
+      try {
+        const loaded = [];
+        const stats = [];
+        for (const run of RUNS) {
+          const { json, loadedFrom } = await fetchJsonWithFallback(run.files);
+          loaded.push({ label: run.label, path: loadedFrom });
+          stats.push(buildStats(run, json));
+        }
+
+        renderRunFiles(loaded);
+        renderMetricsTable(stats);
+        renderInsights(stats);
+        renderCharts(stats);
+        initTraceExplorer(stats.flatMap((s) => s.traces));
+        setStatus("Loaded successfully.");
+      } catch (err) {
+        setStatus(`Failed to load simulation files: ${err.message}`);
+      }
+    }
+
+    main();
+  </script>
+</body>
+</html>
