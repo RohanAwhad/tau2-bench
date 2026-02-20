@@ -105,15 +105,7 @@ Use only the provided trace evidence.
 """.strip()
 
 
-def _truncate(value: Any, limit: int) -> Any:
-    if not isinstance(value, str):
-        return value
-    if len(value) <= limit:
-        return value
-    return value[:limit]
-
-
-def _extract_tool_calls(message: dict[str, Any], limit: int) -> list[dict[str, Any]]:
+def _extract_tool_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
     tool_calls = message.get("tool_calls") or []
     extracted: list[dict[str, Any]] = []
     for tool_call in tool_calls:
@@ -121,7 +113,7 @@ def _extract_tool_calls(message: dict[str, Any], limit: int) -> list[dict[str, A
         extracted.append(
             {
                 "name": fn.get("name"),
-                "arguments": _truncate(fn.get("arguments"), limit),
+                "arguments": fn.get("arguments"),
                 "id": tool_call.get("id"),
                 "type": tool_call.get("type"),
             }
@@ -129,12 +121,10 @@ def _extract_tool_calls(message: dict[str, Any], limit: int) -> list[dict[str, A
     return extracted
 
 
-def _nearest_prior_user_text(
-    messages: list[dict[str, Any]], idx: int, limit: int
-) -> str:
+def _nearest_prior_user_text(messages: list[dict[str, Any]], idx: int) -> str:
     for j in range(idx - 1, -1, -1):
         if messages[j].get("role") == "user":
-            return _truncate(messages[j].get("content", ""), limit)
+            return messages[j].get("content", "")
     return ""
 
 
@@ -172,7 +162,7 @@ def _failed_checks(simulation: dict[str, Any]) -> dict[str, Any]:
 
 
 def _assistant_turns_snapshot(
-    simulation: dict[str, Any], max_chars: int
+    simulation: dict[str, Any],
 ) -> list[dict[str, Any]]:
     snapshots: list[dict[str, Any]] = []
     messages = simulation.get("messages") or []
@@ -192,29 +182,30 @@ def _assistant_turns_snapshot(
         snapshots.append(
             {
                 "turn_idx": message.get("turn_idx"),
-                "prior_user_text": _nearest_prior_user_text(messages, idx, max_chars),
+                "prior_user_text": _nearest_prior_user_text(messages, idx),
                 "emitted": {
                     "finish_reason": raw_data.get("finish_reason"),
-                    "content": _truncate(emitted_message.get("content"), max_chars),
-                    "tool_calls": _extract_tool_calls(emitted_message, max_chars),
+                    "content": emitted_message.get("content"),
+                    "tool_calls": _extract_tool_calls(emitted_message),
                 },
                 "adapter_intermediate": {
-                    "api_draft": _truncate(intermediate.get("api_draft"), max_chars),
-                    "adapter": _truncate(intermediate.get("adapter"), max_chars),
-                    "final": _truncate(intermediate.get("final"), max_chars),
+                    "api_draft": intermediate.get("api_draft"),
+                    "api_draft_tool_calls": intermediate.get("api_draft_tool_calls"),
+                    "adapter": intermediate.get("adapter"),
+                    "final": intermediate.get("final"),
                 },
             }
         )
     return snapshots
 
 
-def build_trace_payload(simulation: dict[str, Any], max_chars: int) -> dict[str, Any]:
+def build_trace_payload(simulation: dict[str, Any]) -> dict[str, Any]:
     return {
         "task_id": str(simulation.get("task_id")),
         "trial": simulation.get("trial"),
         "termination_reason": simulation.get("termination_reason"),
         "failed_checks": _failed_checks(simulation),
-        "assistant_turns": _assistant_turns_snapshot(simulation, max_chars=max_chars),
+        "assistant_turns": _assistant_turns_snapshot(simulation),
     }
 
 
@@ -356,12 +347,6 @@ def parse_args() -> argparse.Namespace:
         help=f"Judge model to use (default: {DEFAULT_MODEL}).",
     )
     parser.add_argument(
-        "--max-content-chars",
-        type=int,
-        default=320,
-        help="Max characters kept per text field in the judge payload.",
-    )
-    parser.add_argument(
         "--output",
         type=Path,
         default=None,
@@ -401,7 +386,7 @@ async def _analyze_single_trace(
     task_id = simulation.get("task_id")
     trial = simulation.get("trial")
 
-    payload = build_trace_payload(simulation, max_chars=args.max_content_chars)
+    payload = build_trace_payload(simulation)
     async with semaphore:
         analysis = await analyze_trace_with_model(
             payload,
