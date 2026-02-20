@@ -116,10 +116,10 @@
 
     .controls {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
       gap: 10px;
-      margin-top: 10px;
-      margin-bottom: 10px;
+      margin-top: 0;
+      margin-bottom: 0;
     }
 
     .controls label {
@@ -151,6 +151,44 @@
       grid-template-columns: minmax(360px, 430px) 1fr;
       gap: 12px;
       margin-top: 10px;
+      align-items: start;
+    }
+
+    .trace-list-col,
+    .trace-detail-col {
+      min-width: 0;
+    }
+
+    .compact-panel {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      margin-bottom: 10px;
+    }
+
+    .compact-panel summary {
+      cursor: pointer;
+      font-weight: 700;
+      padding: 8px 10px;
+      list-style: none;
+    }
+
+    .compact-panel summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .compact-panel[open] summary {
+      border-bottom: 1px solid var(--border);
+      background: #f8fbfa;
+    }
+
+    .compact-panel-body {
+      padding: 10px;
+    }
+
+    .compact-panel-body ul {
+      margin-top: 6px;
+      margin-bottom: 10px;
     }
 
     @media (max-width: 1020px) {
@@ -160,8 +198,8 @@
     }
 
     .trace-table-wrap {
-      max-height: 430px;
-      overflow: auto;
+      overflow-x: auto;
+      overflow-y: visible;
       border: 1px solid var(--border);
       border-radius: 10px;
       margin-top: 8px;
@@ -394,16 +432,7 @@
       <code>http://localhost:8001/notes/airline_simulation_analysis_dashboard.html</code>.
     </p>
 
-    <div class="card">
-      <strong>Run files loaded</strong>
-      <ul id="run-files"></ul>
-      <div id="status" class="muted">Loading...</div>
-    </div>
-
-    <div class="card">
-      <strong>Auto analysis</strong>
-      <ul id="insights"></ul>
-    </div>
+    <div id="status" class="muted">Loading...</div>
 
     <div class="card">
       <strong>Headline metrics</strong>
@@ -436,77 +465,92 @@
       <strong>Trace explorer</strong>
       <div class="muted">All traces listed by task id. Click a row to inspect full message trace.</div>
 
-      <div class="controls">
-        <div>
-          <label for="trace-model">Model</label>
-          <select id="trace-model"></select>
-        </div>
-        <div>
-          <label for="trace-task">Task ID</label>
-          <select id="trace-task"></select>
-        </div>
-        <div>
-          <label for="trace-trial">Trial</label>
-          <select id="trace-trial"></select>
-        </div>
-        <div>
-          <label for="trace-reward">Reward</label>
-          <select id="trace-reward">
-            <option value="all">all</option>
-            <option value="pass">pass</option>
-            <option value="fail">fail</option>
-          </select>
-        </div>
-        <div>
-          <label for="trace-term">Termination</label>
-          <select id="trace-term"></select>
-        </div>
-        <div>
-          <label for="trace-has-tools">Tools</label>
-          <select id="trace-has-tools">
-            <option value="all">all</option>
-            <option value="with_tools">with tools</option>
-            <option value="without_tools">without tools</option>
-          </select>
-        </div>
-        <div>
-          <label for="trace-assert-filter">Assertions</label>
-          <select id="trace-assert-filter">
-            <option value="all">all</option>
-            <option value="failed_only">failed assertions only</option>
-          </select>
-        </div>
-        <div>
-          <label for="trace-sort">Sort</label>
-          <select id="trace-sort">
-            <option value="task_asc">task id asc</option>
-            <option value="task_desc">task id desc</option>
-            <option value="duration_desc">duration desc</option>
-            <option value="duration_asc">duration asc</option>
-          </select>
-        </div>
-        <div>
-          <label for="trace-page-size">Rows per page</label>
-          <select id="trace-page-size">
-            <option value="15">15</option>
-            <option value="30" selected>30</option>
-            <option value="60">60</option>
-          </select>
-        </div>
-        <div>
-          <label for="trace-search">Search</label>
-          <input id="trace-search" type="text" placeholder="search content, tool name, args..." />
-        </div>
-        <div>
-          <label>&nbsp;</label>
-          <button id="trace-reset" type="button">Reset filters</button>
-        </div>
-      </div>
-
-      <div id="trace-count" class="muted"></div>
-
       <div class="trace-layout">
-        <div>
+        <div class="trace-list-col">
+          <details class="compact-panel" id="trace-context-panel">
+            <summary>Run context and quick analysis</summary>
+            <div class="compact-panel-body">
+              <strong>Run files loaded</strong>
+              <ul id="run-files"></ul>
+              <strong>Auto analysis</strong>
+              <ul id="insights"></ul>
+            </div>
+          </details>
+
+          <details class="compact-panel" id="trace-filter-panel">
+            <summary>Filters and search</summary>
+            <div class="compact-panel-body">
+              <div class="controls">
+                <div>
+                  <label for="trace-model">Model</label>
+                  <select id="trace-model"></select>
+                </div>
+                <div>
+                  <label for="trace-task">Task ID</label>
+                  <select id="trace-task"></select>
+                </div>
+                <div>
+                  <label for="trace-trial">Trial</label>
+                  <select id="trace-trial"></select>
+                </div>
+                <div>
+                  <label for="trace-reward">Reward</label>
+                  <select id="trace-reward">
+                    <option value="all">all</option>
+                    <option value="pass">pass</option>
+                    <option value="fail">fail</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="trace-term">Termination</label>
+                  <select id="trace-term"></select>
+                </div>
+                <div>
+                  <label for="trace-has-tools">Tools</label>
+                  <select id="trace-has-tools">
+                    <option value="all">all</option>
+                    <option value="with_tools">with tools</option>
+                    <option value="without_tools">without tools</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="trace-assert-filter">Assertions</label>
+                  <select id="trace-assert-filter">
+                    <option value="all">all</option>
+                    <option value="failed_only">failed assertions only</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="trace-sort">Sort</label>
+                  <select id="trace-sort">
+                    <option value="task_asc">task id asc</option>
+                    <option value="task_desc">task id desc</option>
+                    <option value="duration_desc">duration desc</option>
+                    <option value="duration_asc">duration asc</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="trace-page-size">Rows per page</label>
+                  <select id="trace-page-size">
+                    <option value="15">15</option>
+                    <option value="30" selected>30</option>
+                    <option value="60">60</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="trace-search">Search</label>
+                  <input id="trace-search" type="text" placeholder="search content, tool name, args..." />
+                </div>
+                <div>
+                  <label>&nbsp;</label>
+                  <button id="trace-reset" type="button">Reset filters</button>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <div id="trace-count" class="muted"></div>
+
           <div class="trace-table-wrap">
             <table id="trace-table"></table>
           </div>
@@ -518,7 +562,7 @@
           </div>
         </div>
 
-        <div>
+        <div class="trace-detail-col">
           <div class="detail-controls">
             <div>
               <label for="trace-msg-search">In-trace search</label>
