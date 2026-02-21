@@ -9,7 +9,12 @@ from tau2.config import (
     DEFAULT_LLM_ARGS_USER,
     DEFAULT_LLM_USER,
 )
-from tau2.data_model.simulation import RunConfig
+from tau2.data_model.simulation import (
+    RewardInfo,
+    RunConfig,
+    SimulationRun,
+    TerminationReason,
+)
 from tau2.data_model.tasks import EnvAssertion, RewardType, Task, make_task
 from tau2.run import (
     EvaluationType,
@@ -20,6 +25,7 @@ from tau2.run import (
     run_task,
     run_tasks,
 )
+from tau2.utils.utils import get_now
 
 
 @pytest.fixture
@@ -374,3 +380,64 @@ def test_run_solo_agent(domain_name: str, base_task: Task):
         llm_args_user={},
     )
     assert simulation_results is not None
+
+
+def test_run_tasks_continues_after_task_failure(
+    domain_name: str, base_task: Task, monkeypatch: pytest.MonkeyPatch, tmp_path
+):
+    task_ok = deepcopy(base_task)
+    task_ok.id = "task_ok"
+
+    task_fail = deepcopy(base_task)
+    task_fail.id = "task_fail"
+
+    def fake_run_task(*args, **kwargs):
+        task = kwargs["task"]
+        if task.id == "task_fail":
+            raise ValueError(
+                "AssistantMessage must contain non-empty content or at least one tool call."
+            )
+        return SimulationRun(
+            id="sim_ok",
+            task_id=task.id,
+            start_time=get_now(),
+            end_time=get_now(),
+            duration=0.1,
+            termination_reason=TerminationReason.USER_STOP,
+            reward_info=RewardInfo(reward=1.0),
+            user_cost=0.0,
+            agent_cost=0.0,
+            messages=[],
+        )
+
+    monkeypatch.setattr("tau2.run.run_task", fake_run_task)
+
+    save_to = tmp_path / "run_results.json"
+    results = run_tasks(
+        domain=domain_name,
+        tasks=[task_ok, task_fail],
+        agent="llm_agent",
+        user="user_simulator",
+        llm_agent="gpt-3.5-turbo",
+        llm_args_agent={},
+        llm_user="gpt-3.5-turbo",
+        llm_args_user={},
+        num_trials=1,
+        max_concurrency=2,
+        save_to=save_to,
+        console_display=False,
+    )
+
+    assert len(results.simulations) == 2
+
+    sim_ok = next(sim for sim in results.simulations if sim.task_id == "task_ok")
+    assert sim_ok.reward_info.reward == 1.0
+
+    sim_fail = next(sim for sim in results.simulations if sim.task_id == "task_fail")
+    assert sim_fail.reward_info.reward == 0.0
+    assert sim_fail.termination_reason == TerminationReason.AGENT_ERROR
+    assert sim_fail.reward_info.info["error_type"] == "model_output_invalid"
+    assert sim_fail.reward_info.info["retryable"] is False
+
+    saved = json.loads(save_to.read_text())
+    assert len(saved["simulations"]) == 2

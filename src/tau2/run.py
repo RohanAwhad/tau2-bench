@@ -1,6 +1,8 @@
 import json
 import multiprocessing
 import random
+import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
@@ -11,9 +13,11 @@ from tau2.agent.llm_agent import LLMAgent, LLMGTAgent, LLMSoloAgent
 from tau2.data_model.simulation import (
     AgentInfo,
     Info,
+    RewardInfo,
     Results,
     RunConfig,
     SimulationRun,
+    TerminationReason,
     UserInfo,
 )
 from tau2.data_model.tasks import Task
@@ -353,6 +357,38 @@ def run_tasks(
             style="bold green",
         )
         ConsoleDisplay.console.print(console_text)
+        start_time = get_now()
+        start = time.perf_counter()
+
+        def _classify_run_error(exc: Exception) -> tuple[str, bool]:
+            message = str(exc).lower()
+            exc_name = exc.__class__.__name__.lower()
+
+            if "assistantmessage must contain non-empty content" in message:
+                return "model_output_invalid", False
+            if "jsondecodeerror" in exc_name:
+                return "model_output_invalid", False
+            if "expecting property name enclosed in double quotes" in message:
+                return "model_output_invalid", False
+
+            transient_markers = [
+                "badgatewayerror",
+                "gateway",
+                "connection error",
+                "connection refused",
+                "timeout",
+                "temporarily unavailable",
+                "service unavailable",
+                "rate limit",
+                "upstream request failed",
+            ]
+            if any(
+                marker in message or marker in exc_name for marker in transient_markers
+            ):
+                return "infra_transient", True
+
+            return "unknown", False
+
         try:
             simulation = run_task(
                 domain=domain,
@@ -374,8 +410,34 @@ def run_tasks(
                 ConsoleDisplay.display_simulation(simulation, show_details=False)
             _save(simulation)
         except Exception as e:
-            logger.error(f"Error running task {task.id}, trial {trial}: {e}")
-            raise e
+            error_type, retryable = _classify_run_error(e)
+            logger.error(
+                f"Error running task {task.id}, trial {trial}: {e}. "
+                f"Recording failed simulation. error_type={error_type}, retryable={retryable}"
+            )
+            simulation = SimulationRun(
+                id=str(uuid.uuid4()),
+                task_id=task.id,
+                start_time=start_time,
+                end_time=get_now(),
+                duration=time.perf_counter() - start,
+                termination_reason=TerminationReason.AGENT_ERROR,
+                reward_info=RewardInfo(
+                    reward=0.0,
+                    info={
+                        "error_type": error_type,
+                        "retryable": retryable,
+                        "error_class": e.__class__.__name__,
+                        "error_message": str(e),
+                    },
+                ),
+                user_cost=None,
+                agent_cost=None,
+                messages=[],
+                trial=trial,
+                seed=seed,
+            )
+            _save(simulation)
         return simulation
 
     args = []
@@ -493,9 +555,9 @@ def run_task(
 
     UserConstructor = registry.get_user_constructor(user)
     if issubclass(UserConstructor, DummyUser):
-        assert isinstance(
-            agent, LLMSoloAgent
-        ), "Dummy user can only be used with solo agent"
+        assert isinstance(agent, LLMSoloAgent), (
+            "Dummy user can only be used with solo agent"
+        )
 
     user = UserConstructor(
         tools=user_tools,
