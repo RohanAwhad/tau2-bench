@@ -6,8 +6,8 @@ For each selected simulation trace, this script asks an LLM judge to identify:
 - whether adapter attempted a fix,
 - whether the adapter fix was effective.
 
-The default judge model is Anthropic on Vertex:
-`vertex_ai/claude-opus-4-6@default`.
+Uses AsyncAnthropicVertex directly for 1M context support.
+Default model: claude-opus-4-6@default.
 """
 
 from __future__ import annotations
@@ -15,14 +15,15 @@ from __future__ import annotations
 import asyncio
 import argparse
 import json
+import os
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from litellm import acompletion
+from anthropic import AsyncAnthropicVertex
 from tqdm.auto import tqdm
 
-DEFAULT_MODEL = "vertex_ai/claude-opus-4-6@default"
+DEFAULT_MODEL = "claude-opus-4-6@default"
 
 RESPONSE_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -219,9 +220,8 @@ def _extract_json_object(text: str) -> str | None:
 
 async def analyze_trace_with_model(
     payload: dict[str, Any],
+    client: AsyncAnthropicVertex,
     model: str,
-    vertex_location: str | None,
-    vertex_project: str | None,
     thinking_budget_tokens: int,
     max_tokens: int,
 ) -> dict[str, Any]:
@@ -231,47 +231,40 @@ async def analyze_trace_with_model(
         f"TRACE_JSON:\n{json.dumps(payload, indent=2, ensure_ascii=True)}"
     )
 
-    completion_kwargs: dict[str, Any] = {}
-    if vertex_location:
-        completion_kwargs["vertex_location"] = vertex_location
-    if vertex_project:
-        completion_kwargs["vertex_project"] = vertex_project
-
-    completion_kwargs["max_tokens"] = max_tokens
-    is_claude_model = "claude" in model
-    temperature = 1 if is_claude_model and thinking_budget_tokens > 0 else 0
-    if is_claude_model and thinking_budget_tokens > 0:
-        completion_kwargs["thinking"] = {
+    response = await client.messages.create(
+        model=model,
+        max_tokens=max_tokens,
+        temperature=1,
+        thinking={
             "type": "enabled",
             "budget_tokens": thinking_budget_tokens,
-        }
-
-    response: Any = await acompletion(
-        model=model,
-        temperature=temperature,
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "adapter_usefulness_analysis",
-                "schema": RESPONSE_JSON_SCHEMA,
-                "strict": True,
-            },
         },
+        system=SYSTEM_PROMPT,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
-        **completion_kwargs,
+        extra_headers={
+            "anthropic-beta": "context-1m-2025-08-07",
+        },
     )
 
-    content = response.choices[0].message.content
-    if isinstance(content, list):
-        content = "".join(
-            block.get("text", "") if isinstance(block, dict) else str(block)
-            for block in content
-        )
+    # extract text content from response blocks
+    text_parts: list[str] = []
+    for block in response.content:
+        if block.type == "text":
+            text_parts.append(block.text)
 
-    parsed = json.loads(str(content))
+    content = "".join(text_parts)
+    json_str = _extract_json_object(content)
+    if json_str is None:
+        return {
+            "trace_summary": "Model output was not parseable as JSON.",
+            "major_api_failures": [],
+            "overall_verdict": "unparsed_output",
+            "raw_model_output": content[:4000],
+        }
+
+    parsed = json.loads(json_str)
     return parsed
 
 
@@ -355,12 +348,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--vertex-location",
         default=None,
-        help="Optional Vertex location override (e.g. us-east5).",
+        help="Vertex location (default: CLOUD_ML_REGION env var).",
     )
     parser.add_argument(
         "--vertex-project",
         default=None,
-        help="Optional Vertex project override.",
+        help="Vertex project (default: ANTHROPIC_VERTEX_PROJECT_ID env var).",
     )
     parser.add_argument(
         "--thinking-budget-tokens",
@@ -381,18 +374,19 @@ async def _analyze_single_trace(
     simulation: dict[str, Any],
     idx: int,
     args: argparse.Namespace,
+    client: AsyncAnthropicVertex,
     semaphore: asyncio.Semaphore,
 ) -> dict[str, Any]:
     task_id = simulation.get("task_id")
     trial = simulation.get("trial")
 
     payload = build_trace_payload(simulation)
+
     async with semaphore:
         analysis = await analyze_trace_with_model(
             payload,
+            client=client,
             model=args.model,
-            vertex_location=args.vertex_location,
-            vertex_project=args.vertex_project,
             thinking_budget_tokens=args.thinking_budget_tokens,
             max_tokens=args.max_tokens,
         )
@@ -409,6 +403,15 @@ async def main() -> None:
     args = parse_args()
     if args.max_concurrency < 1:
         raise ValueError("--max-concurrency must be >= 1")
+
+    region = args.vertex_location or os.environ.get("CLOUD_ML_REGION", "us-east5")
+    project = args.vertex_project or os.environ.get("ANTHROPIC_VERTEX_PROJECT_ID")
+    if not project:
+        raise ValueError(
+            "Vertex project required: use --vertex-project or set ANTHROPIC_VERTEX_PROJECT_ID"
+        )
+
+    client = AsyncAnthropicVertex(region=region, project_id=project)
 
     data = json.loads(args.simulation_file.read_text())
     simulations = data.get("simulations") or []
@@ -454,7 +457,9 @@ async def main() -> None:
     semaphore = asyncio.Semaphore(args.max_concurrency)
     total = len(simulations)
     tasks = [
-        asyncio.create_task(_analyze_single_trace(simulation, idx, args, semaphore))
+        asyncio.create_task(
+            _analyze_single_trace(simulation, idx, args, client, semaphore)
+        )
         for idx, simulation in enumerate(simulations, start=1)
     ]
 
@@ -472,6 +477,7 @@ async def main() -> None:
     output = {
         "simulation_file": str(args.simulation_file),
         "model": args.model,
+        "vertex_region": region,
         "max_concurrency": args.max_concurrency,
         "thinking_budget_tokens": args.thinking_budget_tokens,
         "max_tokens": args.max_tokens,
