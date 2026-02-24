@@ -27,3 +27,4 @@
 - Refined `notes/qwen_results_report.html` again: switched intervention summary to absolute task counts (`improved_questions`, `worsened_questions`, `hard_rescue_number`, `easy_harm_number`) and removed McNemar mentions for a simpler reader-facing view.
 - Rebased the intervention section in `notes/qwen_results_report.html` to use `served_direct_v1_gpt-oss-120b` as baseline for counts/examples in the compact table and comparison cards.
 - Renamed report-facing run labels in `notes/qwen_results_report.html` to clearer names (`gpt-oss-120b (baseline)`, `qwen3-30b-a3b (baseline)`, `adapter-mode`, `critic-mode`, `critic-mode [UCB MAST style]`) including Chart.js legend labels.
+- Moved intervention metric definitions to a bullet list directly below the compact table in `notes/qwen_results_report.html` for faster scanning.

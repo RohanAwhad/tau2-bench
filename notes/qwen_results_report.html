@@ -175,6 +175,17 @@
       margin-bottom: 3px;
     }
 
+    .metric-defs {
+      margin: 10px 0 2px;
+      padding-left: 18px;
+      color: var(--muted);
+    }
+
+    .metric-defs li {
+      margin-bottom: 4px;
+      font-size: 0.87rem;
+    }
+
     @media (max-width: 760px) {
       .example-grid {
         grid-template-columns: 1fr;
@@ -243,10 +254,6 @@
 
     <div class="card">
       <strong>New intervention metric set (baseline: gpt-oss-120b)</strong>
-      <p class="muted" style="margin-top:6px;">
-        One-line definition: for each task, compare candidate vs baseline total successes across 3 trials;
-        if candidate is higher that task is <code>improved</code>, if lower it is <code>worsened</code>.
-      </p>
       <table>
         <tr>
           <th>run</th>
@@ -260,6 +267,13 @@
         <tr><td>critic-mode</td><td>-0.0533</td><td>7 / 50</td><td>14 / 50</td><td>2 / 19</td><td>5 / 13</td></tr>
         <tr><td>critic-mode [UCB MAST style]</td><td>+0.0667</td><td>14 / 50</td><td>10 / 50</td><td>7 / 19</td><td>6 / 13</td></tr>
       </table>
+      <ul class="metric-defs">
+        <li><code>mean_delta</code>: average change in per-task win rate vs baseline (candidate minus baseline, over 3 trials).</li>
+        <li><code>improved_questions</code>: number of tasks where candidate has more successes than baseline (shown as improved / 50).</li>
+        <li><code>worsened_questions</code>: number of tasks where candidate has fewer successes than baseline (shown as worsened / 50).</li>
+        <li><code>hard_rescue_number</code>: tasks rescued from baseline hard set, where baseline had 0/3 and candidate has >0/3 (shown as rescued / hard-set size).</li>
+        <li><code>easy_harm_number</code>: tasks harmed from baseline easy set, where baseline had 3/3 and candidate has <3/3 (shown as harmed / easy-set size).</li>
+      </ul>
 
       <div class="comparison-grid">
         <div class="comparison-card">
