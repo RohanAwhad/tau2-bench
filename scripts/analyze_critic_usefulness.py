@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
-"""Analyze adapter usefulness across tau2 simulation traces.
+"""Analyze served-critic usefulness across tau2 simulation traces.
 
-For each selected simulation trace, this script asks an LLM judge to identify:
-- major API-draft failures,
-- whether adapter attempted a fix,
-- whether the adapter fix was effective.
+This script evaluates, per major API failure in a trace:
+- whether the critic attempted to fix it,
+- whether the feedback was correct / incorrect / useless,
+- whether the feedback was actionable.
 
-Uses AsyncAnthropicVertex directly for 1M context support.
-Default model: claude-opus-4-6@default.
+Uses Anthropic Vertex directly with Claude Opus 4.6 and 1M-context beta header.
 """
 
 from __future__ import annotations
 
-import asyncio
 import argparse
+import asyncio
 import json
 import os
 from collections import Counter
@@ -25,87 +24,62 @@ from tqdm.auto import tqdm
 
 DEFAULT_MODEL = "claude-opus-4-6@default"
 
-RESPONSE_JSON_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "trace_summary": {"type": "string"},
-        "major_api_failures": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "turn_idx": {"type": "integer"},
-                    "api_issue": {"type": "string"},
-                    "adapter_attempted_fix": {"type": "boolean"},
-                    "adapter_outcome": {
-                        "type": "string",
-                        "enum": [
-                            "fixed",
-                            "partially_fixed",
-                            "unchanged",
-                            "worse",
-                            "not_attempted",
-                        ],
-                    },
-                    "root_cause": {
-                        "type": "string",
-                        "enum": ["api", "adapter", "mixed", "unknown"],
-                    },
-                    "evidence": {"type": "string"},
-                },
-                "required": [
-                    "turn_idx",
-                    "api_issue",
-                    "adapter_attempted_fix",
-                    "adapter_outcome",
-                    "root_cause",
-                    "evidence",
-                ],
-                "additionalProperties": False,
-            },
-        },
-        "overall_verdict": {"type": "string"},
-    },
-    "required": ["trace_summary", "major_api_failures", "overall_verdict"],
-    "additionalProperties": False,
-}
-
 SYSTEM_PROMPT = """
-You are evaluating adapter usefulness in an agent trajectory.
+You are evaluating critic usefulness for a model-serving architecture where:
+- api_draft is the raw draft from the base model,
+- critic is the critic feedback,
+- final is the post-critic final output,
+- emitted is what was actually returned to tau2.
+
+Goal:
+For each MAJOR API failure in the trace, assess critic behavior.
 
 Definitions:
-- major_api_failure: an API-draft mistake likely to materially hurt task success
-  (wrong tool family, wrong critical argument, missing required action trajectory,
-  wrong critical communicated fact, invalid/no-op behavior, or repeated irrelevant
-  loops).
-- adapter_attempted_fix: adapter made a substantive patch to address that failure.
-- adapter_outcome:
-  - fixed: adapter correction is reflected in emitted output and resolves failure
-  - partially_fixed: some improvement but failure still remains
-  - unchanged: no meaningful change vs API mistake
-  - worse: adapter made the outcome worse
-  - not_attempted: no fix attempted for this failure
+- major_api_failure: API draft mistake likely to materially hurt task success
+  (wrong tool family, wrong critical args, missing required action trajectory,
+   wrong critical communicated fact, invalid/no-op behavior, irrelevant loops).
 
-Return STRICT JSON (no markdown) with this schema:
+- critic_attempt_status:
+  - attempted: critic provided substantive feedback to address the issue
+  - not_attempted: critic gave no substantive fix attempt (e.g., LGTM/no-op)
+
+- critic_feedback_quality (only meaningful when attempted):
+  - correct_feedback: direction is correct relative to the API issue
+  - incorrect_feedback: direction is wrong and likely harmful
+  - useless_feedback: irrelevant, generic, or non-helpful for the issue
+  - not_applicable: when not attempted
+
+- feedback_actionability:
+  - actionable: feedback is specific enough to act on
+  - vague: correct-ish but not concretely actionable
+  - not_applicable: when not attempted
+
+Return STRICT JSON ONLY (no markdown) using this schema:
 {
   "trace_summary": "string",
   "major_api_failures": [
     {
       "turn_idx": 0,
       "api_issue": "string",
-      "adapter_attempted_fix": true,
-      "adapter_outcome": "fixed|partially_fixed|unchanged|worse|not_attempted",
-      "root_cause": "api|adapter|mixed|unknown",
+      "critic_attempt_status": "attempted|not_attempted",
+      "critic_feedback_quality": "correct_feedback|incorrect_feedback|useless_feedback|not_applicable",
+      "feedback_actionability": "actionable|vague|not_applicable",
+      "root_cause": "api|critic|mixed|unknown",
       "evidence": "string"
     }
   ],
   "overall_verdict": "string"
 }
 
-Use only the provided trace evidence.
-- Be state-aware across turns: if adapter output repeats a prerequisite that was already
-  completed with valid tool output (and no new information requires repeating it), do
-  not score that as fixed; prefer unchanged (or worse if it derails progress).
+Rules:
+- Use only provided trace evidence.
+- If no major API failures exist, return empty list.
+- Keep evidence concrete (mention turn idx and specific draft/critic/final behavior).
+- Be state-aware across turns: if feedback asks to repeat a prerequisite that was already
+  completed with valid tool output (e.g., get_user_details already called and returned),
+  do NOT mark it as correct_feedback. Prefer useless_feedback (or incorrect_feedback if
+  it actively derails progress).
+- Do not over-credit partially right feedback that misses the key blocker for the turn.
 """.strip()
 
 
@@ -196,26 +170,23 @@ def _failed_checks(simulation: dict[str, Any]) -> dict[str, Any]:
         "reward_breakdown": reward_info.get("reward_breakdown"),
         "failed_actions": failed_actions,
         "failed_communicate": failed_communicate,
+        "info": reward_info.get("info"),
     }
 
 
-def _assistant_turns_snapshot(
-    simulation: dict[str, Any],
-) -> list[dict[str, Any]]:
+def _assistant_turns_snapshot(simulation: dict[str, Any]) -> list[dict[str, Any]]:
     snapshots: list[dict[str, Any]] = []
     messages = simulation.get("messages") or []
+
     for idx, message in enumerate(messages):
         if message.get("role") != "assistant":
             continue
 
         raw_data = message.get("raw_data") or {}
         completion_metadata = raw_data.get("completion_metadata") or {}
-        adapter_critic = completion_metadata.get("adapter_critic") or {}
-        intermediate = adapter_critic.get("intermediate") or {}
+        critic_data = completion_metadata.get("adapter_critic") or {}
+        intermediate = critic_data.get("intermediate") or {}
         emitted_message = raw_data.get("message") or {}
-
-        if not intermediate and not emitted_message:
-            continue
 
         snapshots.append(
             {
@@ -230,15 +201,17 @@ def _assistant_turns_snapshot(
                     "content": emitted_message.get("content"),
                     "tool_calls": _extract_tool_calls(emitted_message),
                 },
-                "adapter_intermediate": {
+                "critic_intermediate": {
                     "api_draft": intermediate.get("api_draft"),
                     "api_draft_tool_calls": intermediate.get("api_draft_tool_calls"),
-                    "adapter": intermediate.get("adapter"),
+                    "critic": intermediate.get("critic"),
                     "final": intermediate.get("final"),
                 },
+                "critic_tokens": critic_data.get("tokens"),
                 "tool_results_after_turn": _tool_results_after_turn(messages, idx),
             }
         )
+
     return snapshots
 
 
@@ -269,8 +242,8 @@ async def analyze_trace_with_model(
     max_tokens: int,
 ) -> dict[str, Any]:
     prompt = (
-        "Evaluate this trace and return strict JSON per schema.\n"
-        "Focus on major API failures and whether adapter fixed them.\n\n"
+        "Evaluate critic usefulness and return strict JSON per schema.\n"
+        "Focus on major API failures and critic intervention quality.\n\n"
         f"TRACE_JSON:\n{json.dumps(payload, indent=2, ensure_ascii=True)}"
     )
 
@@ -278,20 +251,12 @@ async def analyze_trace_with_model(
         model=model,
         max_tokens=max_tokens,
         temperature=1,
-        thinking={
-            "type": "enabled",
-            "budget_tokens": thinking_budget_tokens,
-        },
+        thinking={"type": "enabled", "budget_tokens": thinking_budget_tokens},
         system=SYSTEM_PROMPT,
-        messages=[
-            {"role": "user", "content": prompt},
-        ],
-        extra_headers={
-            "anthropic-beta": "context-1m-2025-08-07",
-        },
+        messages=[{"role": "user", "content": prompt}],
+        extra_headers={"anthropic-beta": "context-1m-2025-08-07"},
     )
 
-    # extract text content from response blocks
     text_parts: list[str] = []
     for block in response.content:
         if block.type == "text":
@@ -307,8 +272,7 @@ async def analyze_trace_with_model(
             "raw_model_output": content,
         }
 
-    parsed = json.loads(json_str)
-    return parsed
+    return json.loads(json_str)
 
 
 def _aggregate(trace_results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -318,23 +282,30 @@ def _aggregate(trace_results: list[dict[str, Any]]) -> dict[str, Any]:
     for result in trace_results:
         failures = result.get("analysis", {}).get("major_api_failures", [])
         counts["major_api_failures"] += len(failures)
-        for failure in failures:
-            if failure.get("adapter_attempted_fix"):
-                counts["adapter_attempted"] += 1
-            else:
-                counts["adapter_not_attempted"] += 1
 
-            outcome = str(failure.get("adapter_outcome", "")).strip().lower()
-            if outcome:
-                counts[f"outcome_{outcome}"] += 1
+        for failure in failures:
+            attempt_status = (
+                str(failure.get("critic_attempt_status", "")).strip().lower()
+            )
+            if attempt_status:
+                counts[f"attempt_{attempt_status}"] += 1
+
+            feedback_quality = (
+                str(failure.get("critic_feedback_quality", "")).strip().lower()
+            )
+            if feedback_quality:
+                counts[f"feedback_{feedback_quality}"] += 1
+
+            actionability = (
+                str(failure.get("feedback_actionability", "")).strip().lower()
+            )
+            if actionability:
+                counts[f"actionability_{actionability}"] += 1
 
             root_cause = str(failure.get("root_cause", "unknown")).strip().lower()
             root_cause_counts[root_cause] += 1
 
-    return {
-        "counts": dict(counts),
-        "root_cause_counts": dict(root_cause_counts),
-    }
+    return {"counts": dict(counts), "root_cause_counts": dict(root_cause_counts)}
 
 
 def _task_sort_value(task_id: Any) -> tuple[int, Any]:
@@ -346,48 +317,13 @@ def _task_sort_value(task_id: Any) -> tuple[int, Any]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--simulation-file",
-        type=Path,
-        required=True,
-        help="Path to simulation JSON file.",
-    )
-    parser.add_argument(
-        "--task-id",
-        action="append",
-        dest="task_ids",
-        help="Task id filter. Repeat to include multiple task ids.",
-    )
-    parser.add_argument(
-        "--trial",
-        action="append",
-        type=int,
-        dest="trials",
-        help="Trial filter. Repeat to include multiple trial ids.",
-    )
-    parser.add_argument(
-        "--max-traces",
-        type=int,
-        default=None,
-        help="Maximum number of traces to analyze after filtering.",
-    )
-    parser.add_argument(
-        "--max-concurrency",
-        type=int,
-        default=8,
-        help="Maximum number of concurrent trace analyses.",
-    )
-    parser.add_argument(
-        "--model",
-        default=DEFAULT_MODEL,
-        help=f"Judge model to use (default: {DEFAULT_MODEL}).",
-    )
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=None,
-        help="Output JSON path. Defaults to notes/<simulation_stem>_adapter_usefulness.json",
-    )
+    parser.add_argument("--simulation-file", type=Path, required=True)
+    parser.add_argument("--task-id", action="append", dest="task_ids")
+    parser.add_argument("--trial", action="append", type=int, dest="trials")
+    parser.add_argument("--max-traces", type=int, default=None)
+    parser.add_argument("--max-concurrency", type=int, default=8)
+    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--output", type=Path, default=None)
     parser.add_argument(
         "--vertex-location",
         default=None,
@@ -398,18 +334,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Vertex project (default: ANTHROPIC_VERTEX_PROJECT_ID env var).",
     )
-    parser.add_argument(
-        "--thinking-budget-tokens",
-        type=int,
-        default=10000,
-        help="Thinking budget tokens for Claude thinking mode.",
-    )
-    parser.add_argument(
-        "--max-tokens",
-        type=int,
-        default=16000,
-        help="Max output tokens for judge completion.",
-    )
+    parser.add_argument("--thinking-budget-tokens", type=int, default=10000)
+    parser.add_argument("--max-tokens", type=int, default=16000)
     return parser.parse_args()
 
 
@@ -420,24 +346,19 @@ async def _analyze_single_trace(
     client: AsyncAnthropicVertex,
     semaphore: asyncio.Semaphore,
 ) -> dict[str, Any]:
-    task_id = simulation.get("task_id")
-    trial = simulation.get("trial")
-
     payload = build_trace_payload(simulation)
-
     async with semaphore:
         analysis = await analyze_trace_with_model(
-            payload,
+            payload=payload,
             client=client,
             model=args.model,
             thinking_budget_tokens=args.thinking_budget_tokens,
             max_tokens=args.max_tokens,
         )
-
     return {
         "_index": idx,
-        "task_id": str(task_id),
-        "trial": trial,
+        "task_id": str(simulation.get("task_id")),
+        "trial": simulation.get("trial"),
         "analysis": analysis,
     }
 
@@ -492,22 +413,18 @@ async def main() -> None:
     output_path = args.output
     if output_path is None:
         output_path = Path("notes") / (
-            f"{args.simulation_file.stem}_adapter_usefulness.json"
+            f"{args.simulation_file.stem}_critic_usefulness.json"
         )
-
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     semaphore = asyncio.Semaphore(args.max_concurrency)
-    total = len(simulations)
     tasks = [
-        asyncio.create_task(
-            _analyze_single_trace(simulation, idx, args, client, semaphore)
-        )
-        for idx, simulation in enumerate(simulations, start=1)
+        asyncio.create_task(_analyze_single_trace(sim, i, args, client, semaphore))
+        for i, sim in enumerate(simulations, start=1)
     ]
 
     trace_results: list[dict[str, Any]] = []
-    with tqdm(total=total, desc="Analyzing traces", unit="trace") as progress:
+    with tqdm(total=len(tasks), desc="Analyzing traces", unit="trace") as progress:
         for task in asyncio.as_completed(tasks):
             result = await task
             trace_results.append(result)
