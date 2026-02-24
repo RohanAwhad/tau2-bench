@@ -22,3 +22,6 @@
 - Added executable script `scripts/compute_comparison_metrics.py` to compute and export JSON reports for one baseline and multiple candidates.
 - Added tests in `tests/test_comparison_metrics.py` and followed red-green cycle (initial missing-module failure -> implementation -> passing tests).
 - Updated docs at `docs/adapter_critic_improvement_metrics.md` with finalized metric definitions, McNemar trial-0 policy, future inference upgrades, and CLI usage example.
+- Added `notes/qwen_results_report.html` with embedded pass^k/pass@k PNGs and qwen-focused intervention metric tables.
+- Updated `notes/qwen_results_report.html` to render pass charts with Chart.js (interactive hover + legend toggles) and replaced wide intervention table with compact `% improved`/`% worsened` summary plus side-by-side improved/worsened task examples per comparison.
+- Refined `notes/qwen_results_report.html` again: switched intervention summary to absolute task counts (`improved_questions`, `worsened_questions`, `hard_rescue_number`, `easy_harm_number`) and removed McNemar mentions for a simpler reader-facing view.
