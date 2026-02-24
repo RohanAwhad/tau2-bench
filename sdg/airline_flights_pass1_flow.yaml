@@ -1,0 +1,67 @@
+metadata:
+  id: airline-flights-pass1-generator
+  name: "Airline Flights Pass 1 Generator"
+  description: >-
+    Generator-only SDG Hub flow for deterministic airline flight data.
+    Produces long flight-date rows, then aggregates into tau-style flights JSON.
+  version: "1.0.0"
+  author: "SDG Hub"
+  tags:
+    - "tau2-bench"
+    - "airline"
+    - "generator"
+    - "pass1"
+  dataset_requirements:
+    required_columns:
+      - "seed"
+      - "n_flights"
+      - "date_start"
+      - "n_days"
+      - "current_time_est"
+      - "airport_codes"
+    description: >-
+      One row per generation config. airport_codes should be a list of IATA strings.
+
+blocks:
+  - block_type: "AirlineFlightLongGeneratorBlock"
+    block_config:
+      block_name: "generate_flight_rows"
+      input_cols:
+        - "seed"
+        - "n_flights"
+        - "date_start"
+        - "n_days"
+        - "current_time_est"
+        - "airport_codes"
+      output_cols:
+        - "config_id"
+        - "flight_number"
+        - "date"
+
+  - block_type: "AirlineFlightsObjectBuilderBlock"
+    block_config:
+      block_name: "build_flights_object"
+      input_cols:
+        - "config_id"
+        - "flight_number"
+        - "origin"
+        - "destination"
+        - "scheduled_departure_time_est"
+        - "scheduled_arrival_time_est"
+        - "date"
+        - "status"
+        - "actual_departure_time_est"
+        - "actual_arrival_time_est"
+        - "estimated_departure_time_est"
+        - "estimated_arrival_time_est"
+        - "available_seats_basic_economy"
+        - "available_seats_economy"
+        - "available_seats_business"
+        - "price_basic_economy"
+        - "price_economy"
+        - "price_business"
+      output_cols:
+        - "flights"
+        - "flights_json"
+        - "flight_stats"
+        - "flights_long"

@@ -1,0 +1,16 @@
+{
+  "config_id": 0,
+  "num_flights": 300,
+  "num_flight_instances": 9000,
+  "status_counts": {
+    "available": 4500,
+    "landed": 3991,
+    "cancelled": 373,
+    "on time": 63,
+    "flying": 42,
+    "delayed": 31
+  },
+  "date_start": "2024-05-01",
+  "date_end": "2024-05-30",
+  "num_airports": 20
+}
