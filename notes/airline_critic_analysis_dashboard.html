@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Airline Critic Analysis Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #f7f8f7;
+      --card: #ffffff;
+      --ink: #1f2628;
+      --muted: #667176;
+      --border: #d5dde0;
+      --direct: #2c9a7a;
+      --adapter: #c7784e;
+      --critic: #3f6fb5;
+      --good: #2e8b57;
+      --bad: #c05252;
+      --warn: #b67a22;
+    }
+
+    * { box-sizing: border-box; font-family: ui-sans-serif, -apple-system, Segoe UI, Helvetica, Arial, sans-serif; }
+    body { margin: 0; color: var(--ink); background: radial-gradient(circle at 0 0, #ebf2f4 0%, var(--bg) 38%); }
+    .wrap { max-width: 1360px; margin: 20px auto; padding: 0 14px 18px; }
+    h1 { margin: 0; font-size: 1.6rem; }
+    .muted { color: var(--muted); }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-top: 12px; }
+    .grid-2 { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+    .grid-3 { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+    .story { border: 1px solid var(--border); border-radius: 10px; background: #fbfefe; padding: 10px; }
+    .kicker { color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; font-weight: 700; }
+    .big { margin-top: 2px; font-size: 1.25rem; font-weight: 700; }
+    .sub { margin-top: 2px; font-size: 0.84rem; }
+    canvas { width: 100%; height: 290px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th, td { border-bottom: 1px solid var(--border); text-align: left; padding: 6px; vertical-align: top; }
+    th { background: #f7fbfb; position: sticky; top: 0; z-index: 1; }
+    code { background: #eef3f5; border: 1px solid #dde6ea; border-radius: 6px; padding: 1px 5px; }
+    .chips { margin-top: 5px; }
+    .chip { display: inline-block; border: 1px solid #d9e4e8; border-radius: 999px; padding: 3px 8px; margin-right: 6px; margin-top: 6px; font-size: 0.78rem; background: #f2f8fa; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    input, select, button { border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; font-size: 0.86rem; background: #fff; }
+    button { cursor: pointer; }
+    .trace-panel { max-height: 520px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; margin-top: 8px; }
+    .trace-detail { margin-top: 8px; border: 1px solid var(--border); border-radius: 10px; padding: 10px; background: #fcfefe; font-size: 0.88rem; line-height: 1.45; white-space: pre-wrap; }
+    .pager { margin-top: 8px; display: flex; gap: 8px; align-items: center; }
+    .list { margin: 6px 0 0; padding-left: 18px; }
+    .list li { margin-bottom: 4px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Airline Critic Analysis Dashboard</h1>
+    <div class="muted">Fast view for critic (31e8ea6) + benchmark comparison vs gpt-oss-120b and adapter.</div>
+
+    <div class="card">
+      <strong>Data Sources</strong>
+      <div id="sourceStatus" class="muted" style="margin-top:6px;">Loading...</div>
+      <div class="chips" id="sourceChips"></div>
+    </div>
+
+    <div class="card">
+      <strong>Benchmark Results (3 trials x 50 tasks)</strong>
+      <div class="grid-2" style="margin-top:8px;">
+        <div><canvas id="passHatChart"></canvas></div>
+        <div><canvas id="passAtChart"></canvas></div>
+      </div>
+      <div style="margin-top:10px;"><table id="benchmarkTable"></table></div>
+    </div>
+
+    <div class="card">
+      <strong>Critic Usefulness Story</strong>
+      <div class="grid-3" id="storyCards" style="margin-top:8px;"></div>
+      <div id="takeaway" style="margin-top:8px; font-size:0.9rem;"></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <strong>Intervention Funnel</strong>
+        <canvas id="funnelChart"></canvas>
+      </div>
+      <div class="card">
+        <strong>Root Cause Breakdown</strong>
+        <canvas id="rootChart"></canvas>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <strong>Feedback Quality (Attempted)</strong>
+        <canvas id="qualityChart"></canvas>
+      </div>
+      <div class="card">
+        <strong>Actionability</strong>
+        <canvas id="actionChart"></canvas>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <strong>Task Failure Hotspots</strong>
+        <table id="taskTable" style="margin-top:8px;"></table>
+      </div>
+      <div class="card">
+        <strong>Case Studies</strong>
+        <div id="cases" style="margin-top:8px;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <strong>Trace Explorer</strong>
+        <label>Task <input id="fltTask" placeholder="e.g. 8" style="width:88px;" /></label>
+        <label>Trial <input id="fltTrial" placeholder="0-2" style="width:70px;" /></label>
+        <label>Quality
+          <select id="fltQuality">
+            <option value="">All</option>
+            <option value="correct_feedback">correct_feedback</option>
+            <option value="incorrect_feedback">incorrect_feedback</option>
+            <option value="useless_feedback">useless_feedback</option>
+            <option value="not_applicable">not_applicable</option>
+          </select>
+        </label>
+        <button id="fltClear" type="button">Clear</button>
+      </div>
+
+      <div class="trace-panel">
+        <table id="traceTable"></table>
+      </div>
+      <div class="pager">
+        <button id="prevPage" type="button">Prev</button>
+        <span id="pageInfo" class="muted"></span>
+        <button id="nextPage" type="button">Next</button>
+      </div>
+      <div id="traceDetail" class="trace-detail muted">Select a trace row to inspect failures and critic evidence.</div>
+    </div>
+  </div>
+
+  <script>
+    const BENCHMARK = [
+      {
+        key: "served_direct",
+        label: "gpt-oss-120b",
+        color: "#2c9a7a",
+        file: "experiments/node09_benchmark_jsons_20260222/SERVER_31e8ea6f7b9be2bb101867819082b673b9a72f9f_BENCH_58dd82da0df690a95a1512a1cce96b71ac38b396/20260221_191706_prod/tau_outputs/data/simulations/served_direct_prod_3x50_mc1_temp1_default_tauref_ra_benchmarking.json",
+        avgReward: 0.4200,
+        passHat: {1: 0.4200, 2: 0.3400, 3: 0.3044},
+        passAt: {1: 0.4200, 2: 0.5000, 3: 0.5444}
+      },
+      {
+        key: "served_adapter",
+        label: "adapter (gpt-oss-20b)",
+        color: "#c7784e",
+        file: "experiments/node09_benchmark_jsons_20260222/SERVER_31e8ea6f7b9be2bb101867819082b673b9a72f9f_BENCH_58dd82da0df690a95a1512a1cce96b71ac38b396/20260221_191222_prod/tau_outputs/data/simulations/served_adapter_prod_3x50_mc10_temp1_default_tauref_ra_benchmarking.json",
+        avgReward: 0.4400,
+        passHat: {1: 0.4400, 2: 0.3600, 3: 0.3200},
+        passAt: {1: 0.4400, 2: 0.5200, 3: 0.5600}
+      },
+      {
+        key: "served_critic",
+        label: "critic (gpt-oss-20b)",
+        color: "#3f6fb5",
+        file: "experiments/node09_benchmark_jsons_20260222/SERVER_31e8ea6f7b9be2bb101867819082b673b9a72f9f_BENCH_58dd82da0df690a95a1512a1cce96b71ac38b396/20260221_191503_prod/tau_outputs/data/simulations/served_critic_prod_3x50_mc10_temp1_default_tauref_ra_benchmarking.json",
+        avgReward: 0.3933,
+        passHat: {1: 0.3933, 2: 0.3222, 3: 0.2926},
+        passAt: {1: 0.3933, 2: 0.4644, 3: 0.5059}
+      },
+      {
+        key: "served_adapter_v3",
+        label: "adapter (glm4.7-flash)",
+        color: "#b56576",
+        file: "experiments/node09_benchmark_jsons_20260222/SERVER_9daf98ee4cee4653da40421def21f5a7260d41ef_BENCH_58dd82da0df690a95a1512a1cce96b71ac38b396/20260222_054158_prod_01/tau_outputs/data/simulations/served_adapter_prod_3x50_mc6_temp1_v3_glm_flash.json",
+        avgReward: 0.4933,
+        passHat: {1: 0.4933, 2: 0.4178, 3: 0.3793},
+        passAt: {1: 0.4933, 2: 0.5689, 3: 0.6059}
+      },
+      {
+        key: "served_critic_v3",
+        label: "critic (glm4.7-flash v3)",
+        color: "#5a4fb2",
+        file: "experiments/node09_benchmark_jsons_20260222/SERVER_9daf98ee4cee4653da40421def21f5a7260d41ef_BENCH_58dd82da0df690a95a1512a1cce96b71ac38b396/20260222_054158_prod_02/tau_outputs/data/simulations/served_critic_prod_3x50_mc6_temp1_v3_glm_flash.json",
+        avgReward: 0.5267,
+        passHat: {1: 0.5267, 2: 0.4244, 3: 0.3696},
+        passAt: {1: 0.5267, 2: 0.6289, 3: 0.6763}
+      }
+    ];
+
+    const CRITIC_FILES = [
+      "critic_usefulness_served_critic_prod_3x50_mc6_temp1_v3_glm_flash.json",
+      "./critic_usefulness_served_critic_prod_3x50_mc6_temp1_v3_glm_flash.json",
+      "/notes/critic_usefulness_served_critic_prod_3x50_mc6_temp1_v3_glm_flash.json",
+      "critic_usefulness_served_critic_prod_3x50_mc10_temp1_default_tauref_ra_benchmarking.json",
+      "./critic_usefulness_served_critic_prod_3x50_mc10_temp1_default_tauref_ra_benchmarking.json",
+      "/notes/critic_usefulness_served_critic_prod_3x50_mc10_temp1_default_tauref_ra_benchmarking.json"
+    ];
+
+    const charts = {};
+    const state = {
+      analysis: null,
+      rows: [],
+      byKey: new Map(),
+      filtered: [],
+      selectedKey: null,
+      page: 1,
+      pageSize: 35
+    };
+
+    const CHART_BASE = {
+      responsive: true,
+      maintainAspectRatio: true,
+      aspectRatio: 2.15,
+      animation: false,
+      resizeDelay: 120
+    };
+
+    function fmt(x, d = 4) { return Number(x).toFixed(d); }
+    function fmtPct(part, whole, d = 1) { if (!whole) return "0.0%"; return `${((Number(part) / Number(whole)) * 100).toFixed(d)}%`; }
+    function esc(s) {
+      return String(s)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    async function loadJsonFirst(paths) {
+      for (const p of paths) {
+        try {
+          const r = await fetch(p, { cache: "no-store" });
+          if (!r.ok) continue;
+          const data = await r.json();
+          return { data, path: p };
+        } catch (_) {}
+      }
+      return null;
+    }
+
+    function renderSources(criticLoaded) {
+      const status = document.getElementById("sourceStatus");
+      const chips = document.getElementById("sourceChips");
+      chips.innerHTML = "";
+
+      BENCHMARK.forEach((b) => {
+        const c = document.createElement("span");
+        c.className = "chip";
+        c.textContent = `${b.label}: ${b.file}`;
+        chips.appendChild(c);
+      });
+
+      if (criticLoaded) {
+        const c = document.createElement("span");
+        c.className = "chip";
+        c.textContent = `critic-analysis: ${criticLoaded.path}`;
+        chips.appendChild(c);
+        status.textContent = "Loaded benchmark constants and critic analysis JSON.";
+      } else {
+        status.textContent = "Failed to load critic analysis JSON.";
+      }
+    }
+
+    function renderBenchmark() {
+      document.getElementById("benchmarkTable").innerHTML = `
+        <thead>
+          <tr><th>Model</th><th>Avg Reward</th><th>pass^1</th><th>pass^2</th><th>pass^3</th><th>pass@1</th><th>pass@2</th><th>pass@3</th></tr>
+        </thead>
+        <tbody>
+          ${BENCHMARK.map((b) => `
+            <tr>
+              <td>${esc(b.label)}</td>
+              <td>${fmt(b.avgReward)}</td>
+              <td>${fmt(b.passHat[1])}</td>
+              <td>${fmt(b.passHat[2])}</td>
+              <td>${fmt(b.passHat[3])}</td>
+              <td>${fmt(b.passAt[1])}</td>
+              <td>${fmt(b.passAt[2])}</td>
+              <td>${fmt(b.passAt[3])}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      `;
+
+      const passHatLabels = ["pass^1", "pass^2", "pass^3"];
+      const passAtLabels = ["pass@1", "pass@2", "pass@3"];
+
+      if (charts.passHat) charts.passHat.destroy();
+      charts.passHat = new Chart(document.getElementById("passHatChart"), {
+        type: "bar",
+        data: {
+          labels: passHatLabels,
+          datasets: BENCHMARK.map((b) => ({
+            label: b.label,
+            data: [b.passHat[1], b.passHat[2], b.passHat[3]],
+            backgroundColor: b.color
+          }))
+        },
+        options: { ...CHART_BASE, scales: { y: { beginAtZero: true, max: 1 } } }
+      });
+
+      if (charts.passAt) charts.passAt.destroy();
+      charts.passAt = new Chart(document.getElementById("passAtChart"), {
+        type: "bar",
+        data: {
+          labels: passAtLabels,
+          datasets: BENCHMARK.map((b) => ({
+            label: b.label,
+            data: [b.passAt[1], b.passAt[2], b.passAt[3]],
+            backgroundColor: b.color
+          }))
+        },
+        options: { ...CHART_BASE, scales: { y: { beginAtZero: true, max: 1 } } }
+      });
+    }
+
+    function buildRows(raw) {
+      const traces = Array.isArray(raw?.trace_results) ? raw.trace_results : [];
+      return traces.map((t) => {
+        const failures = Array.isArray(t?.analysis?.major_api_failures) ? t.analysis.major_api_failures : [];
+        const row = {
+          key: `${t.task_id}::${t.trial}`,
+          taskId: String(t.task_id),
+          trial: Number(t.trial),
+          summary: t?.analysis?.trace_summary || "",
+          verdict: t?.analysis?.overall_verdict || "",
+          failures,
+          major: failures.length,
+          attempted: 0,
+          notAttempted: 0,
+          correct: 0,
+          incorrect: 0,
+          useless: 0,
+          na: 0,
+          actionable: 0,
+          vague: 0,
+          root: { api: 0, critic: 0, mixed: 0, unknown: 0 }
+        };
+
+        failures.forEach((f) => {
+          const attempt = String(f?.critic_attempt_status || "").toLowerCase();
+          const quality = String(f?.critic_feedback_quality || "").toLowerCase();
+          const actionability = String(f?.feedback_actionability || "").toLowerCase();
+          const root = String(f?.root_cause || "unknown").toLowerCase();
+
+          if (attempt === "attempted") row.attempted += 1;
+          else row.notAttempted += 1;
+
+          if (quality === "correct_feedback") row.correct += 1;
+          else if (quality === "incorrect_feedback") row.incorrect += 1;
+          else if (quality === "useless_feedback") row.useless += 1;
+          else row.na += 1;
+
+          if (actionability === "actionable") row.actionable += 1;
+          else if (actionability === "vague") row.vague += 1;
+
+          if (Object.prototype.hasOwnProperty.call(row.root, root)) row.root[root] += 1;
+          else row.root.unknown += 1;
+        });
+
+        return row;
+      });
+    }
+
+    function renderStory(raw) {
+      const c = raw?.aggregate?.counts || {};
+      const roots = raw?.aggregate?.root_cause_counts || {};
+
+      const major = Number(c.major_api_failures || 0);
+      const attempted = Number(c.attempt_attempted || 0);
+      const notAttempted = Number(c.attempt_not_attempted || 0);
+      const correct = Number(c.feedback_correct_feedback || 0);
+      const incorrect = Number(c.feedback_incorrect_feedback || 0);
+      const useless = Number(c.feedback_useless_feedback || 0);
+      const actionable = Number(c.actionability_actionable || 0);
+      const vague = Number(c.actionability_vague || 0);
+
+      document.getElementById("storyCards").innerHTML = `
+        <div class="story"><div class="kicker">Major API Failures</div><div class="big">${major}</div><div class="sub">Across ${raw.num_traces_analyzed} traces</div></div>
+        <div class="story"><div class="kicker">Critic Attempted</div><div class="big">${attempted}</div><div class="sub">Coverage ${fmtPct(attempted, major)}</div></div>
+        <div class="story"><div class="kicker">Correct Feedback</div><div class="big">${correct}</div><div class="sub">Precision ${fmtPct(correct, attempted)}</div></div>
+        <div class="story"><div class="kicker">Incorrect Feedback</div><div class="big">${incorrect}</div><div class="sub">Harm rate ${fmtPct(incorrect, attempted)}</div></div>
+        <div class="story"><div class="kicker">Useless Feedback</div><div class="big">${useless}</div><div class="sub">Noise ${fmtPct(useless, attempted)}</div></div>
+        <div class="story"><div class="kicker">Actionable Among Attempted</div><div class="big">${fmtPct(actionable, attempted)}</div><div class="sub">actionable=${actionable}, vague=${vague}, not_attempted=${notAttempted}</div></div>
+      `;
+
+      const leadRoot = Object.entries(roots).sort((a,b)=>b[1]-a[1])[0] || ["unknown", 0];
+      document.getElementById("takeaway").innerHTML =
+        `<strong>Takeaway:</strong> Most frequent root-cause bucket is <strong>${esc(leadRoot[0])}</strong> (${leadRoot[1]}). ` +
+        `Critic attempts on ${fmtPct(attempted, major)} of major failures, with mixed quality (correct ${fmtPct(correct, attempted)}, incorrect ${fmtPct(incorrect, attempted)}).`;
+    }
+
+    function renderCriticCharts(raw) {
+      const c = raw?.aggregate?.counts || {};
+      const roots = raw?.aggregate?.root_cause_counts || {};
+
+      const major = Number(c.major_api_failures || 0);
+      const attempted = Number(c.attempt_attempted || 0);
+      const notAttempted = Number(c.attempt_not_attempted || 0);
+      const correct = Number(c.feedback_correct_feedback || 0);
+      const incorrect = Number(c.feedback_incorrect_feedback || 0);
+      const useless = Number(c.feedback_useless_feedback || 0);
+      const actionable = Number(c.actionability_actionable || 0);
+      const vague = Number(c.actionability_vague || 0);
+
+      if (charts.funnel) charts.funnel.destroy();
+      charts.funnel = new Chart(document.getElementById("funnelChart"), {
+        type: "bar",
+        data: {
+          labels: ["major_failures", "attempted", "correct", "incorrect", "useless", "not_attempted"],
+          datasets: [{
+            data: [major, attempted, correct, incorrect, useless, notAttempted],
+            backgroundColor: ["#6a7a89", "#3f6fb5", "#2e8b57", "#c05252", "#b67a22", "#8a8a8a"]
+          }]
+        },
+        options: { ...CHART_BASE, indexAxis: "y" }
+      });
+
+      if (charts.root) charts.root.destroy();
+      charts.root = new Chart(document.getElementById("rootChart"), {
+        type: "doughnut",
+        data: {
+          labels: ["api", "critic", "mixed", "unknown"],
+          datasets: [{
+            data: [Number(roots.api||0), Number(roots.critic||0), Number(roots.mixed||0), Number(roots.unknown||0)],
+            backgroundColor: ["#3f6fb5", "#c05252", "#8d68c0", "#8a8a8a"]
+          }]
+        },
+        options: CHART_BASE
+      });
+
+      if (charts.quality) charts.quality.destroy();
+      charts.quality = new Chart(document.getElementById("qualityChart"), {
+        type: "bar",
+        data: {
+          labels: ["correct", "incorrect", "useless"],
+          datasets: [{ data: [correct, incorrect, useless], backgroundColor: ["#2e8b57", "#c05252", "#b67a22"] }]
+        },
+        options: CHART_BASE
+      });
+
+      if (charts.action) charts.action.destroy();
+      charts.action = new Chart(document.getElementById("actionChart"), {
+        type: "bar",
+        data: {
+          labels: ["actionable", "vague", "not_attempted"],
+          datasets: [{ data: [actionable, vague, notAttempted], backgroundColor: ["#2e8b57", "#b67a22", "#8a8a8a"] }]
+        },
+        options: CHART_BASE
+      });
+    }
+
+    function renderTaskTable(rows) {
+      const byTask = new Map();
+      rows.forEach((r) => {
+        if (!byTask.has(r.taskId)) {
+          byTask.set(r.taskId, { taskId: r.taskId, traces: 0, major: 0, attempted: 0, correct: 0, incorrect: 0, useless: 0 });
+        }
+        const x = byTask.get(r.taskId);
+        x.traces += 1;
+        x.major += r.major;
+        x.attempted += r.attempted;
+        x.correct += r.correct;
+        x.incorrect += r.incorrect;
+        x.useless += r.useless;
+      });
+
+      const arr = [...byTask.values()].map((x) => ({
+        ...x,
+        avgMajor: x.traces ? x.major / x.traces : 0,
+        incorrectRate: x.attempted ? x.incorrect / x.attempted : 0
+      })).sort((a,b) => b.avgMajor - a.avgMajor || b.incorrectRate - a.incorrectRate || Number(a.taskId)-Number(b.taskId));
+
+      document.getElementById("taskTable").innerHTML = `
+        <thead><tr><th>Task</th><th>Avg Major Failures</th><th>Attempted</th><th>Correct</th><th>Incorrect</th><th>Useless</th></tr></thead>
+        <tbody>
+          ${arr.slice(0, 20).map((r) => `
+            <tr>
+              <td>${esc(r.taskId)}</td>
+              <td>${fmt(r.avgMajor, 2)}</td>
+              <td>${r.attempted}</td>
+              <td>${r.correct}</td>
+              <td>${r.incorrect}</td>
+              <td>${r.useless}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      `;
+    }
+
+    function renderCases(rows) {
+      const bad = [];
+      const good = [];
+      rows.forEach((r) => {
+        r.failures.forEach((f) => {
+          const q = String(f.critic_feedback_quality || "").toLowerCase();
+          const a = String(f.feedback_actionability || "").toLowerCase();
+          const e = { taskId: r.taskId, trial: r.trial, turn: f.turn_idx, issue: f.api_issue };
+          if (q === "incorrect_feedback" || q === "useless_feedback") bad.push(e);
+          if (q === "correct_feedback" && a === "actionable") good.push(e);
+        });
+      });
+
+      const worst = bad.slice(0, 6);
+      const best = good.slice(0, 6);
+      document.getElementById("cases").innerHTML = `
+        <div><strong>Worst blunders</strong></div>
+        <ul class="list">
+          ${worst.map((x) => `<li><span class="mono">task ${x.taskId} / trial ${x.trial} / turn ${x.turn}</span> - ${esc(x.issue)}</li>`).join("") || "<li>None</li>"}
+        </ul>
+        <div style="margin-top:10px;"><strong>Best saves</strong></div>
+        <ul class="list">
+          ${best.map((x) => `<li><span class="mono">task ${x.taskId} / trial ${x.trial} / turn ${x.turn}</span> - ${esc(x.issue)}</li>`).join("") || "<li>None</li>"}
+        </ul>
+      `;
+    }
+
+    function applyFilters(resetPage = true) {
+      if (resetPage) state.page = 1;
+      const task = String(document.getElementById("fltTask").value || "").trim();
+      const trial = String(document.getElementById("fltTrial").value || "").trim();
+      const quality = String(document.getElementById("fltQuality").value || "").trim();
+
+      state.filtered = state.rows.filter((r) => {
+        if (task && r.taskId !== task) return false;
+        if (trial && String(r.trial) !== trial) return false;
+        if (quality) {
+          const has = r.failures.some((f) => String(f.critic_feedback_quality || "") === quality);
+          if (!has) return false;
+        }
+        return true;
+      });
+
+      renderTraceTable();
+    }
+
+    function renderTraceTable() {
+      const start = (state.page - 1) * state.pageSize;
+      const end = start + state.pageSize;
+      const pageRows = state.filtered.slice(start, end);
+
+      document.getElementById("traceTable").innerHTML = `
+        <thead><tr><th>Task</th><th>Trial</th><th>Major</th><th>Attempted</th><th>Correct</th><th>Incorrect</th><th>Useless</th></tr></thead>
+        <tbody>
+          ${pageRows.map((r) => `
+            <tr data-key="${esc(r.key)}" style="cursor:pointer;">
+              <td>${esc(r.taskId)}</td>
+              <td>${r.trial}</td>
+              <td>${r.major}</td>
+              <td>${r.attempted}</td>
+              <td>${r.correct}</td>
+              <td>${r.incorrect}</td>
+              <td>${r.useless}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      `;
+
+      const totalPages = Math.max(1, Math.ceil(state.filtered.length / state.pageSize));
+      document.getElementById("pageInfo").textContent = `Page ${state.page}/${totalPages} (${state.filtered.length} traces)`;
+      document.getElementById("prevPage").disabled = state.page <= 1;
+      document.getElementById("nextPage").disabled = state.page >= totalPages;
+
+      document.querySelectorAll("#traceTable tbody tr").forEach((tr) => {
+        tr.addEventListener("click", () => {
+          state.selectedKey = tr.getAttribute("data-key");
+          renderTraceDetail();
+        });
+      });
+    }
+
+    function renderTraceDetail() {
+      const detail = document.getElementById("traceDetail");
+      const r = state.byKey.get(state.selectedKey);
+      if (!r) {
+        detail.textContent = "Select a trace row to inspect failures and critic evidence.";
+        detail.classList.add("muted");
+        return;
+      }
+
+      const lines = [];
+      lines.push(`task=${r.taskId} trial=${r.trial}`);
+      lines.push(`summary: ${r.summary}`);
+      lines.push(`overall_verdict: ${r.verdict}`);
+      lines.push("");
+      lines.push(`major_failures=${r.major} attempted=${r.attempted} correct=${r.correct} incorrect=${r.incorrect} useless=${r.useless}`);
+      lines.push("");
+      r.failures.forEach((f, i) => {
+        lines.push(`#${i+1} turn=${f.turn_idx}`);
+        lines.push(`api_issue: ${f.api_issue}`);
+        lines.push(`critic_attempt_status=${f.critic_attempt_status} feedback_quality=${f.critic_feedback_quality} actionability=${f.feedback_actionability} root_cause=${f.root_cause}`);
+        lines.push(`evidence: ${f.evidence}`);
+        lines.push("");
+      });
+
+      detail.textContent = lines.join("\\n");
+      detail.classList.remove("muted");
+    }
+
+    async function init() {
+      renderBenchmark();
+
+      const criticLoaded = await loadJsonFirst(CRITIC_FILES);
+      renderSources(criticLoaded);
+      if (!criticLoaded) return;
+
+      state.analysis = criticLoaded.data;
+      state.rows = buildRows(criticLoaded.data);
+      state.byKey = new Map(state.rows.map((r) => [r.key, r]));
+      state.filtered = [...state.rows];
+
+      renderStory(criticLoaded.data);
+      renderCriticCharts(criticLoaded.data);
+      renderTaskTable(state.rows);
+      renderCases(state.rows);
+      renderTraceTable();
+      renderTraceDetail();
+
+      ["fltTask", "fltTrial", "fltQuality"].forEach((id) => {
+        document.getElementById(id).addEventListener("input", () => applyFilters(true));
+        document.getElementById(id).addEventListener("change", () => applyFilters(true));
+      });
+      document.getElementById("fltClear").addEventListener("click", () => {
+        document.getElementById("fltTask").value = "";
+        document.getElementById("fltTrial").value = "";
+        document.getElementById("fltQuality").value = "";
+        applyFilters(true);
+      });
+
+      document.getElementById("prevPage").addEventListener("click", () => {
+        if (state.page > 1) {
+          state.page -= 1;
+          renderTraceTable();
+        }
+      });
+      document.getElementById("nextPage").addEventListener("click", () => {
+        const totalPages = Math.max(1, Math.ceil(state.filtered.length / state.pageSize));
+        if (state.page < totalPages) {
+          state.page += 1;
+          renderTraceTable();
+        }
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>

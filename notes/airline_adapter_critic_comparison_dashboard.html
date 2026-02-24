@@ -839,6 +839,52 @@
     </div>
 
     <div class="card">
+      <strong>Critic usefulness analysis</strong>
+      <div id="critic-usefulness-status" class="muted">Loading critic usefulness analysis...</div>
+      <div id="critic-usefulness-source" class="muted" style="margin-top:4px;"></div>
+      <div id="critic-usefulness-summary" style="margin-top:8px;"></div>
+      <div id="critic-usefulness-story" class="story-grid" style="margin-top:8px;"></div>
+      <div id="critic-usefulness-takeaway" class="adapter-takeaway" style="margin-top:8px;"></div>
+
+      <div style="margin-top:8px;">
+        <strong style="font-size:0.9rem;">Critic intervention funnel</strong>
+        <div id="criticFunnelChart"></div>
+      </div>
+
+      <div style="margin-top:8px;">
+        <strong style="font-size:0.9rem;">Where major failures came from</strong>
+        <canvas id="criticRootCauseChart"></canvas>
+      </div>
+
+      <div class="grid-2" style="margin-top:8px;">
+        <div>
+          <strong style="font-size:0.9rem;">Usefulness score distribution (per trace)</strong>
+          <canvas id="criticUsefulnessHistChart"></canvas>
+        </div>
+        <div>
+          <strong style="font-size:0.9rem;">Major failures vs usefulness</strong>
+          <canvas id="criticFailuresVsRewardChart"></canvas>
+        </div>
+      </div>
+
+      <div style="margin-top:8px;">
+        <strong style="font-size:0.9rem;">Failure load distribution across traces</strong>
+        <canvas id="criticFailuresPerTraceChart"></canvas>
+      </div>
+
+      <div id="critic-usefulness-priority" class="priority-list"></div>
+
+      <details class="compact-panel" style="margin-top:10px; margin-bottom:0;" id="critic-usefulness-table-panel">
+        <summary>Per-trace critic usefulness table</summary>
+        <div class="compact-panel-body">
+          <div class="trace-table-wrap" style="margin-top:0;">
+            <table id="critic-usefulness-table"></table>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div class="card">
       <strong>Trace explorer</strong>
       <div class="muted">All traces listed by task id. Click a row to inspect full message trace.</div>
 
@@ -1054,6 +1100,36 @@
           "../experiments/node09_benchmark_jsons_20260222/SERVER_31e8ea6f7b9be2bb101867819082b673b9a72f9f_BENCH_58dd82da0df690a95a1512a1cce96b71ac38b396/20260221_191222_prod/tau_outputs/data/simulations/served_adapter_prod_3x50_mc10_temp1_default_tauref_ra_benchmarking.json",
           "/experiments/node09_benchmark_jsons_20260222/SERVER_31e8ea6f7b9be2bb101867819082b673b9a72f9f_BENCH_58dd82da0df690a95a1512a1cce96b71ac38b396/20260221_191222_prod/tau_outputs/data/simulations/served_adapter_prod_3x50_mc10_temp1_default_tauref_ra_benchmarking.json"
         ]
+      },
+      {
+        key: "served_critic",
+        label: "critic (glm4.7-flash v3)",
+        color: "#7b5ea7",
+        files: [
+          "../experiments/node09_benchmark_jsons_20260222/SERVER_9daf98ee4cee4653da40421def21f5a7260d41ef_BENCH_58dd82da0df690a95a1512a1cce96b71ac38b396/20260222_054158_prod_02/tau_outputs/data/simulations/served_critic_prod_3x50_mc6_temp1_v3_glm_flash.json",
+          "/experiments/node09_benchmark_jsons_20260222/SERVER_9daf98ee4cee4653da40421def21f5a7260d41ef_BENCH_58dd82da0df690a95a1512a1cce96b71ac38b396/20260222_054158_prod_02/tau_outputs/data/simulations/served_critic_prod_3x50_mc6_temp1_v3_glm_flash.json"
+        ]
+      },
+      {
+        key: "served_critic_v1",
+        label: "critic (gpt-oss-20b)",
+        color: "#5f4b8b",
+        files: [
+          "../experiments/node09_benchmark_jsons_20260222/SERVER_31e8ea6f7b9be2bb101867819082b673b9a72f9f_BENCH_58dd82da0df690a95a1512a1cce96b71ac38b396/20260221_191503_prod/tau_outputs/data/simulations/served_critic_prod_3x50_mc10_temp1_default_tauref_ra_benchmarking.json",
+          "/experiments/node09_benchmark_jsons_20260222/SERVER_31e8ea6f7b9be2bb101867819082b673b9a72f9f_BENCH_58dd82da0df690a95a1512a1cce96b71ac38b396/20260221_191503_prod/tau_outputs/data/simulations/served_critic_prod_3x50_mc10_temp1_default_tauref_ra_benchmarking.json"
+        ]
+      }
+    ];
+
+    const TOPLINE_ONLY_RUNS = [
+      {
+        key: "glm47_flash_direct",
+        label: "glm-4.7-flash (direct baseline)",
+        color: "#2b6777",
+        files: [
+          "../experiments/node05_simulation_jsons_all_20260222/glm47flash_baseline_prod_3x50_mc20_temp1_node05_container_hostnet.json",
+          "/experiments/node05_simulation_jsons_all_20260222/glm47flash_baseline_prod_3x50_mc20_temp1_node05_container_hostnet.json"
+        ]
       }
     ];
 
@@ -1063,8 +1139,25 @@
       "/notes/adapter_usefulness_served_adapter_prod_3x50_mc6_temp1_v3_glm_flash.json"
     ];
 
+    const CRITIC_USEFULNESS_FILES = [
+      "critic_usefulness_served_critic_prod_3x50_mc6_temp1_v3_glm_flash.json",
+      "./critic_usefulness_served_critic_prod_3x50_mc6_temp1_v3_glm_flash.json",
+      "/notes/critic_usefulness_served_critic_prod_3x50_mc6_temp1_v3_glm_flash.json"
+    ];
+
     const charts = {};
     const adapterUsefulnessState = {
+      loaded: false,
+      sourcePath: null,
+      raw: null,
+      aggregateCounts: null,
+      rootCauseCounts: null,
+      traceMap: new Map(),
+      traceRows: [],
+      numTracesAnalyzed: 0,
+      matchedToViewer: 0
+    };
+    const criticUsefulnessState = {
       loaded: false,
       sourcePath: null,
       raw: null,
@@ -1233,7 +1326,7 @@
       if (!intermediate || typeof intermediate !== "object") return null;
 
       const out = {};
-      ["api_draft", "adapter", "final"].forEach((k) => {
+      ["api_draft", "adapter", "critic", "final"].forEach((k) => {
         const v = intermediate[k];
         if (v == null) return;
         const text = typeof v === "string" ? v : safeJson(v);
@@ -1414,6 +1507,234 @@
         traceRows: rows,
         traceMap
       };
+    }
+
+    function summarizeCriticAnalysis(analysis) {
+      const failures = Array.isArray(analysis?.major_api_failures) ? analysis.major_api_failures : [];
+      const outcomeCounts = {
+        correct_feedback: 0,
+        incorrect_feedback: 0,
+        useless_feedback: 0,
+        not_applicable: 0
+      };
+      const attemptCounts = { attempted: 0, not_attempted: 0 };
+      const actionabilityCounts = { actionable: 0, vague: 0, not_applicable: 0 };
+      const rootCauseCounts = { api: 0, critic: 0, mixed: 0, unknown: 0 };
+      const issuesByTurn = new Map();
+
+      failures.forEach((f) => {
+        const fb = String(f?.critic_feedback_quality || "not_applicable").toLowerCase();
+        if (Object.prototype.hasOwnProperty.call(outcomeCounts, fb)) outcomeCounts[fb] += 1;
+
+        const attempt = String(f?.critic_attempt_status || "not_attempted").toLowerCase();
+        if (Object.prototype.hasOwnProperty.call(attemptCounts, attempt)) attemptCounts[attempt] += 1;
+
+        const act = String(f?.feedback_actionability || "not_applicable").toLowerCase();
+        if (Object.prototype.hasOwnProperty.call(actionabilityCounts, act)) actionabilityCounts[act] += 1;
+
+        const root = String(f?.root_cause || "unknown").toLowerCase();
+        if (Object.prototype.hasOwnProperty.call(rootCauseCounts, root)) rootCauseCounts[root] += 1;
+        else rootCauseCounts.unknown += 1;
+
+        const turnIdx = Number(f?.turn_idx);
+        if (!Number.isNaN(turnIdx)) {
+          if (!issuesByTurn.has(turnIdx)) issuesByTurn.set(turnIdx, []);
+          issuesByTurn.get(turnIdx).push(f);
+        }
+      });
+
+      const majorFailures = failures.length;
+      const helped = outcomeCounts.correct_feedback;
+      const harmed = outcomeCounts.incorrect_feedback;
+      const usefulnessScore = majorFailures
+        ? (helped - harmed) / majorFailures
+        : 0;
+
+      return {
+        majorFailures,
+        outcomeCounts,
+        attemptCounts,
+        actionabilityCounts,
+        rootCauseCounts,
+        fixedCount: helped,
+        usefulnessScore,
+        issuesByTurn
+      };
+    }
+
+    function buildCriticUsefulnessData(raw) {
+      const traceResults = Array.isArray(raw?.trace_results) ? raw.trace_results : [];
+
+      const rows = traceResults.map((entry) => {
+        const taskId = String(entry?.task_id ?? "");
+        const trial = Number(entry?.trial ?? -1);
+        const analysis = entry?.analysis || {};
+        const summary = summarizeCriticAnalysis(analysis);
+        return {
+          key: traceKey(taskId, trial),
+          taskId,
+          trial,
+          analysis,
+          ...summary
+        };
+      });
+
+      const traceMap = new Map(rows.map((row) => [row.key, row]));
+
+      const aggregateCounts = {
+        major_api_failures: 0,
+        attempt_attempted: 0,
+        attempt_not_attempted: 0,
+        feedback_correct_feedback: 0,
+        feedback_incorrect_feedback: 0,
+        feedback_useless_feedback: 0,
+        feedback_not_applicable: 0,
+        actionability_actionable: 0,
+        actionability_vague: 0,
+        actionability_not_applicable: 0,
+        ...(raw?.aggregate?.counts || {})
+      };
+
+      const rootCauseCounts = {
+        api: 0,
+        critic: 0,
+        mixed: 0,
+        unknown: 0,
+        ...(raw?.aggregate?.root_cause_counts || {})
+      };
+
+      if (!raw?.aggregate?.counts && rows.length) {
+        rows.forEach((row) => {
+          aggregateCounts.major_api_failures += row.majorFailures;
+          aggregateCounts.feedback_correct_feedback += row.outcomeCounts.correct_feedback;
+          aggregateCounts.feedback_incorrect_feedback += row.outcomeCounts.incorrect_feedback;
+          aggregateCounts.feedback_useless_feedback += row.outcomeCounts.useless_feedback;
+          aggregateCounts.feedback_not_applicable += row.outcomeCounts.not_applicable;
+          aggregateCounts.attempt_attempted += row.attemptCounts.attempted;
+          aggregateCounts.attempt_not_attempted += row.attemptCounts.not_attempted;
+        });
+      }
+
+      if (!raw?.aggregate?.root_cause_counts && rows.length) {
+        rows.forEach((row) => {
+          Object.keys(rootCauseCounts).forEach((k) => {
+            rootCauseCounts[k] += row.rootCauseCounts[k] || 0;
+          });
+        });
+      }
+
+      return {
+        loaded: true,
+        sourcePath: null,
+        raw,
+        model: raw?.model || "",
+        simulationFile: raw?.simulation_file || "",
+        numTracesAnalyzed: Number(raw?.num_traces_analyzed ?? rows.length),
+        aggregateCounts,
+        rootCauseCounts,
+        traceRows: rows,
+        traceMap
+      };
+    }
+
+    function buildCriticStory(rows, counts, roots) {
+      const totalTraces = rows.length;
+      const failureValues = rows.map((r) => Number(r.majorFailures || 0));
+      const computedFailures = failureValues.reduce((a, b) => a + b, 0);
+      const totalFailures = Number(counts.major_api_failures || computedFailures);
+      const tracesWithFailures = failureValues.filter((x) => x > 0).length;
+      const severeTraceCount = failureValues.filter((x) => x >= 5).length;
+
+      const attempted = Number(counts.attempt_attempted || 0);
+      const notAttempted = Number(counts.attempt_not_attempted || 0);
+      const correct = Number(counts.feedback_correct_feedback || 0);
+      const incorrect = Number(counts.feedback_incorrect_feedback || 0);
+      const useless = Number(counts.feedback_useless_feedback || 0);
+      const actionable = Number(counts.actionability_actionable || 0);
+      const vague = Number(counts.actionability_vague || 0);
+
+      const rootCauseCounts = {
+        api: Number(roots.api || 0),
+        critic: Number(roots.critic || 0),
+        mixed: Number(roots.mixed || 0),
+        unknown: Number(roots.unknown || 0)
+      };
+
+      const rootEntries = Object.entries(rootCauseCounts)
+        .map(([key, count]) => ({ key, label: key, count }))
+        .sort((a, b) => b.count - a.count);
+      const leadRoot = rootEntries[0] || { key: "unknown", label: "unknown", count: 0 };
+
+      const netUsefulness = totalFailures ? (correct - incorrect) / totalFailures : 0;
+
+      const maxFail = Math.max(...failureValues, 0);
+      const failureBuckets = [];
+      for (let i = 0; i <= Math.min(maxFail, 9); i++) {
+        failureBuckets.push({ label: String(i), count: failureValues.filter((x) => x === i).length });
+      }
+      if (maxFail >= 10) {
+        failureBuckets.push({ label: "10+", count: failureValues.filter((x) => x >= 10).length });
+      }
+
+      const usefulnessScores = rows.map((r) => r.usefulnessScore);
+      const usefulnessBins = [
+        { label: "-1.0", lo: -1.01, hi: -0.75 },
+        { label: "-0.75", lo: -0.75, hi: -0.5 },
+        { label: "-0.5", lo: -0.5, hi: -0.25 },
+        { label: "-0.25", lo: -0.25, hi: -0.001 },
+        { label: "0", lo: -0.001, hi: 0.001 },
+        { label: "0.25", lo: 0.001, hi: 0.25 },
+        { label: "0.5", lo: 0.25, hi: 0.5 },
+        { label: "0.75", lo: 0.5, hi: 0.75 },
+        { label: "1.0", lo: 0.75, hi: 1.01 }
+      ];
+      const usefulnessHist = usefulnessBins.map((bin) => ({
+        label: bin.label,
+        count: usefulnessScores.filter((s) => s > bin.lo && s <= bin.hi).length
+      }));
+
+      const failuresVsReward = rows.map((r) => ({
+        x: r.majorFailures,
+        y: r.usefulnessScore,
+        taskId: r.taskId,
+        trial: r.trial
+      }));
+
+      const topTriage = [...rows]
+        .sort((a, b) => b.majorFailures - a.majorFailures || a.usefulnessScore - b.usefulnessScore)
+        .slice(0, 6)
+        .map((r) => ({ taskId: r.taskId, trial: r.trial, majorFailures: r.majorFailures, usefulnessScore: r.usefulnessScore }));
+
+      return {
+        totalTraces, tracesWithFailures, severeTraceCount, totalFailures,
+        avgFailuresPerTrace: totalTraces ? totalFailures / totalTraces : 0,
+        medianFailuresPerTrace: quantile(failureValues, 0.5),
+        attempted, notAttempted, correct, incorrect, useless, actionable, vague,
+        netUsefulness, rootCauseCounts, rootEntries, leadRoot,
+        failureBuckets, usefulnessHist, failuresVsReward, topTriage
+      };
+    }
+
+    function attachCriticUsefulnessToTraces(traces) {
+      let matched = 0;
+      traces.forEach((trace) => {
+        if (trace.modelKey !== "served_critic") {
+          trace.criticUsefulness = null;
+          return;
+        }
+        const key = traceKey(trace.taskId, trace.trial);
+        const analysis = criticUsefulnessState.traceMap.get(key) || null;
+        trace.criticUsefulness = analysis;
+        if (analysis) matched += 1;
+        if (!analysis) return;
+        const searchText = [
+          analysis.analysis?.trace_summary || "",
+          analysis.analysis?.overall_verdict || "",
+          ...((analysis.analysis?.major_api_failures || []).map((f) => `${f.api_issue || ""} ${f.evidence || ""}`))
+        ].join(" ").toLowerCase();
+        trace.searchBlob = `${trace.searchBlob} ${searchText}`;
+      });
+      return { matched, totalCriticTraces: traces.filter((t) => t.modelKey === "served_critic").length };
     }
 
     function buildAdapterStory(rows, counts, roots) {
@@ -1816,12 +2137,12 @@
       li.push(`Ranking by pass^1: ${byPass1.map((x) => `${x.label} (${fmt(x.passHat[1])})`).join(" > ")}.`);
       if (sd && sa) {
         li.push(
-          `adapter vs gpt-oss-120b: pass^1 ${fmt(sa.passHat[1] - sd.passHat[1])}, pass^2 ${fmt(
+           `adapter vs gpt-oss-120b: pass^1 ${fmt(sa.passHat[1] - sd.passHat[1])}, pass^2 ${fmt(
             sa.passHat[2] - sd.passHat[2]
           )}, pass^3 ${fmt(sa.passHat[3] - sd.passHat[3])}.`
         );
         li.push(
-          `adapter vs gpt-oss-120b pass@k deltas: @1 ${fmt(sa.passAt[1] - sd.passAt[1])}, @2 ${fmt(
+           `adapter vs gpt-oss-120b pass@k deltas: @1 ${fmt(sa.passAt[1] - sd.passAt[1])}, @2 ${fmt(
             sa.passAt[2] - sd.passAt[2]
           )}, @3 ${fmt(sa.passAt[3] - sd.passAt[3])}.`
         );
@@ -1834,6 +2155,29 @@
           `Adapter usefulness file loaded: ${adapterUsefulnessState.numTracesAnalyzed} traces, ${
             c.major_api_failures || 0
           } major API failures, fixed=${c.outcome_fixed || 0}, worse=${c.outcome_worse || 0}.`
+        );
+      }
+      if (criticUsefulnessState.loaded) {
+        const c = criticUsefulnessState.aggregateCounts || {};
+        li.push(
+          `Critic usefulness file loaded: ${criticUsefulnessState.numTracesAnalyzed} traces, ${
+            c.major_api_failures || 0
+          } major API failures, correct=${c.feedback_correct_feedback || 0}, incorrect=${c.feedback_incorrect_feedback || 0}.`
+        );
+      }
+      const sc = stats.find((x) => x.key === "served_critic");
+      if (sd && sc) {
+        li.push(
+           `critic vs gpt-oss-120b: pass^1 ${fmt(sc.passHat[1] - sd.passHat[1])}, pass^2 ${fmt(
+            sc.passHat[2] - sd.passHat[2]
+          )}, pass^3 ${fmt(sc.passHat[3] - sd.passHat[3])}.`
+        );
+      }
+      if (sa && sc) {
+        li.push(
+          `critic vs adapter: pass^1 ${fmt(sc.passHat[1] - sa.passHat[1])}, pass^2 ${fmt(
+            sc.passHat[2] - sa.passHat[2]
+          )}, pass^3 ${fmt(sc.passHat[3] - sa.passHat[3])}.`
         );
       }
       document.getElementById("insights").innerHTML = li.map((x) => `<li>${x}</li>`).join("");
@@ -2188,19 +2532,275 @@
       tableEl.innerHTML = tableHeader + (tableRows || `<tr><td colspan="6" class="muted">No trace rows.</td></tr>`);
     }
 
+    function renderCriticUsefulnessSection() {
+      const statusEl = document.getElementById("critic-usefulness-status");
+      const sourceEl = document.getElementById("critic-usefulness-source");
+      const summaryEl = document.getElementById("critic-usefulness-summary");
+      const storyEl = document.getElementById("critic-usefulness-story");
+      const takeawayEl = document.getElementById("critic-usefulness-takeaway");
+      const priorityEl = document.getElementById("critic-usefulness-priority");
+      const tableEl = document.getElementById("critic-usefulness-table");
+
+      if (!criticUsefulnessState.loaded) {
+        statusEl.textContent = "No critic usefulness analysis file loaded.";
+        sourceEl.textContent = "";
+        summaryEl.innerHTML = "";
+        storyEl.innerHTML = "";
+        takeawayEl.innerHTML = "";
+        priorityEl.innerHTML = '<span class="muted">No triage data.</span>';
+        tableEl.innerHTML = `<tr><td class="muted">No data.</td></tr>`;
+        document.getElementById("criticFunnelChart").innerHTML = "";
+        ["criticRootCauseChart", "criticUsefulnessHistChart", "criticFailuresVsRewardChart", "criticFailuresPerTraceChart"].forEach((k) => {
+          if (charts[k]) { charts[k].destroy(); charts[k] = null; }
+        });
+        return;
+      }
+
+      const rows = criticUsefulnessState.traceRows || [];
+      const counts = criticUsefulnessState.aggregateCounts || {};
+      const roots = criticUsefulnessState.rootCauseCounts || {};
+      const story = buildCriticStory(rows, counts, roots);
+
+      statusEl.textContent = `Loaded critic usefulness analysis for ${criticUsefulnessState.numTracesAnalyzed} trace(s), matched ${criticUsefulnessState.matchedToViewer} trace(s) in current simulation viewer.`;
+      sourceEl.innerHTML = `<code>${esc(criticUsefulnessState.sourcePath || "")}</code>`;
+
+      const totalFailures = story.totalFailures;
+      const summaryChips = [
+        `major failures ${totalFailures}`,
+        `correct feedback ${story.correct} (${fmtPct(story.correct, totalFailures)})`,
+        `incorrect feedback ${story.incorrect} (${fmtPct(story.incorrect, totalFailures)})`,
+        `useless feedback ${story.useless} (${fmtPct(story.useless, totalFailures)})`,
+        `not attempted ${story.notAttempted} (${fmtPct(story.notAttempted, totalFailures)})`
+      ];
+      summaryEl.innerHTML = summaryChips.map((x) => `<span class="chip">${esc(x)}</span>`).join("");
+
+      const netLabel = story.netUsefulness >= 0 ? "net positive" : "net negative";
+      const rootShare = fmtPct(story.leadRoot.count, totalFailures);
+      storyEl.innerHTML = `
+        <div class="story-step step-warn">
+          <div class="story-kicker">1) Failure load</div>
+          <div class="story-main">${String(story.tracesWithFailures)}/${String(story.totalTraces)} traces</div>
+          <div class="story-sub">have at least one major failure (${fmtPct(story.tracesWithFailures, story.totalTraces)}).</div>
+          <div class="story-note">avg ${fmtShort(story.avgFailuresPerTrace, 2)} failures/trace, median ${fmtShort(story.medianFailuresPerTrace, 1)}.</div>
+        </div>
+        <div class="story-step step-bad">
+          <div class="story-kicker">2) Main source</div>
+          <div class="story-main">${esc(story.leadRoot.label)} ${rootShare}</div>
+          <div class="story-sub">largest root-cause bucket of major failures.</div>
+          <div class="story-note">api ${fmtPct(story.rootCauseCounts.api, totalFailures)} · mixed ${fmtPct(story.rootCauseCounts.mixed, totalFailures)} · critic ${fmtPct(story.rootCauseCounts.critic, totalFailures)}.</div>
+        </div>
+        <div class="story-step ${story.netUsefulness >= 0 ? "step-good" : "step-bad"}">
+          <div class="story-kicker">3) Critic effect</div>
+          <div class="story-main">correct ${fmtPct(story.correct, totalFailures)}</div>
+          <div class="story-sub">correct feedback on ${String(story.correct)} of ${String(totalFailures)} major failures.</div>
+          <div class="story-note">${netLabel}; net usefulness ${fmtShort(story.netUsefulness, 2)}; actionable ${fmtPct(story.actionable, story.attempted)}.</div>
+        </div>
+        <div class="story-step step-warn">
+          <div class="story-kicker">4) Triage first</div>
+          <div class="story-main">${String(story.severeTraceCount)} traces with 5+ failures</div>
+          <div class="story-sub">${fmtPct(story.severeTraceCount, story.totalTraces)} of analyzed traces are high-density failure traces.</div>
+          <div class="story-note">Use task/trial list below to prioritize inspection.</div>
+        </div>
+      `;
+
+      takeawayEl.innerHTML =
+        `<strong>Narrative takeaway:</strong> most failure mass is ${esc(story.leadRoot.label)} root cause (${rootShare}), ` +
+        `critic attempted intervention on ${fmtPct(story.attempted, totalFailures)} of failures. ` +
+        `Of attempted: correct ${fmtPct(story.correct, story.attempted)}, incorrect ${fmtPct(story.incorrect, story.attempted)}, useless ${fmtPct(story.useless, story.attempted)}. ` +
+        `Actionable feedback in ${fmtPct(story.actionable, story.attempted)} of attempts.`;
+
+      const priorityItems = story.topTriage
+        .map((t) => `<li><code>task ${esc(t.taskId)} · trial ${String(t.trial)}</code> — ${String(t.majorFailures)} major failures, usefulness ${fmtShort(t.usefulnessScore, 2)}</li>`)
+        .join("");
+      priorityEl.innerHTML = priorityItems
+        ? `<strong style="font-size:0.86rem;">Suggested triage queue (highest failure density first)</strong><ul>${priorityItems}</ul>`
+        : '<span class="muted">No triage data.</span>';
+
+      // Funnel
+      const funnelEl = document.getElementById("criticFunnelChart");
+      function criticFunnelBar(color, label, count, total) {
+        const pct = fmtPct(count, total);
+        const w = total > 0 ? Math.max(((count / total) * 100), 3) : 0;
+        return `<div class="funnel-bar" style="width:${w}%;background:${color};"><span class="funnel-bar-text">${count} ${label} (${pct})</span></div>`;
+      }
+      funnelEl.innerHTML = `
+        <div class="funnel">
+          <div class="funnel-row">
+            <div class="funnel-label">total failures</div>
+            <div class="funnel-bar-wrap">
+              <div class="funnel-bar" style="width:100%;background:#64748b;">
+                <span class="funnel-bar-text">${totalFailures} major failures across ${story.totalTraces} traces</span>
+              </div>
+            </div>
+          </div>
+          <div class="funnel-connector-line"></div>
+          <div class="funnel-row">
+            <div class="funnel-label">attempted</div>
+            <div class="funnel-bar-wrap">
+              ${criticFunnelBar("#577590", "attempted", story.attempted, totalFailures)}
+            </div>
+          </div>
+          <div class="funnel-connector-line" style="margin-left:160px;"></div>
+          <div class="funnel-group-header" style="margin-left:160px;">feedback quality (of ${story.attempted} attempted)</div>
+          <div class="funnel-row funnel-indent">
+            <div class="funnel-label">correct</div>
+            <div class="funnel-bar-wrap">
+              ${criticFunnelBar("#76c893", "", story.correct, story.attempted)}
+            </div>
+          </div>
+          <div class="funnel-row funnel-indent">
+            <div class="funnel-label">incorrect</div>
+            <div class="funnel-bar-wrap">
+              ${criticFunnelBar("#e76f51", "", story.incorrect, story.attempted)}
+            </div>
+          </div>
+          <div class="funnel-row funnel-indent">
+            <div class="funnel-label">useless</div>
+            <div class="funnel-bar-wrap">
+              ${criticFunnelBar("#f2cc8f", "", story.useless, story.attempted)}
+            </div>
+          </div>
+          <div class="funnel-connector-line" style="margin-left:160px;"></div>
+          <div class="funnel-group-header" style="margin-left:160px;">actionability (of ${story.attempted} attempted)</div>
+          <div class="funnel-row funnel-indent">
+            <div class="funnel-label">actionable</div>
+            <div class="funnel-bar-wrap">
+              ${criticFunnelBar("#43aa8b", "", story.actionable, story.attempted)}
+            </div>
+          </div>
+          <div class="funnel-row funnel-indent">
+            <div class="funnel-label">vague</div>
+            <div class="funnel-bar-wrap">
+              ${criticFunnelBar("#adb5bd", "", story.vague, story.attempted)}
+            </div>
+          </div>
+          <div class="funnel-connector-line"></div>
+          <div class="funnel-row">
+            <div class="funnel-label">not attempted</div>
+            <div class="funnel-bar-wrap">
+              ${criticFunnelBar("#94a3b8", "not attempted", story.notAttempted, totalFailures)}
+            </div>
+          </div>
+          <div class="funnel-connector-line"></div>
+          <div class="funnel-group-header">net effect: correct ${story.correct} (${fmtPct(story.correct, totalFailures)}), incorrect ${story.incorrect} (${fmtPct(story.incorrect, totalFailures)}), missed ${story.notAttempted} (${fmtPct(story.notAttempted, totalFailures)})</div>
+        </div>
+      `;
+
+      // Root cause chart
+      const rootRows = [
+        { key: "api", label: "api", color: "#43aa8b", value: story.rootCauseCounts.api },
+        { key: "mixed", label: "mixed", color: "#577590", value: story.rootCauseCounts.mixed },
+        { key: "critic", label: "critic", color: "#7b5ea7", value: story.rootCauseCounts.critic },
+        { key: "unknown", label: "unknown", color: "#adb5bd", value: story.rootCauseCounts.unknown }
+      ].sort((a, b) => b.value - a.value);
+
+      rebuildChart("criticRootCauseChart", document.getElementById("criticRootCauseChart"), {
+        type: "bar",
+        data: {
+          labels: rootRows.map((r) => `${r.label} (${fmtPct(r.value, totalFailures)})`),
+          datasets: [{ label: "major failures", data: rootRows.map((r) => r.value), backgroundColor: rootRows.map((r) => r.color) }]
+        },
+        options: {
+          responsive: true, indexAxis: "y",
+          scales: { x: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: `count (total ${String(totalFailures)})` } } },
+          plugins: { legend: { display: false } }
+        }
+      });
+
+      // Usefulness histogram
+      const uhColors = story.usefulnessHist.map((b) => {
+        const v = parseFloat(b.label);
+        if (v < -0.001) return "#e76f51";
+        if (v > 0.001) return "#76c893";
+        return "#adb5bd";
+      });
+      rebuildChart("criticUsefulnessHistChart", document.getElementById("criticUsefulnessHistChart"), {
+        type: "bar",
+        data: {
+          labels: story.usefulnessHist.map((b) => b.label),
+          datasets: [{ label: "# traces", data: story.usefulnessHist.map((b) => b.count), backgroundColor: uhColors }]
+        },
+        options: {
+          responsive: true,
+          scales: { y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: "traces" } }, x: { title: { display: true, text: "usefulness score" } } },
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `${String(ctx.raw)} traces (${fmtPct(ctx.raw, story.totalTraces)})` } } }
+        }
+      });
+
+      // Failures vs usefulness scatter
+      const fvrData = story.failuresVsReward;
+      rebuildChart("criticFailuresVsRewardChart", document.getElementById("criticFailuresVsRewardChart"), {
+        type: "scatter",
+        data: {
+          datasets: [{
+            label: "trace",
+            data: fvrData,
+            backgroundColor: fvrData.map((d) => d.y >= 0 ? "rgba(118,200,147,0.6)" : "rgba(231,111,81,0.6)"),
+            pointRadius: 5, pointHoverRadius: 7
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: { x: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: "major failures" } }, y: { min: -1.1, max: 1.1, title: { display: true, text: "usefulness score" } } },
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => { const d = fvrData[ctx.dataIndex]; return `task ${d.taskId} trial ${d.trial}: ${d.x} failures, usefulness ${fmtShort(d.y, 2)}`; } } } }
+        }
+      });
+
+      // Failure load histogram
+      const fbColors = story.failureBuckets.map((b) => {
+        const v = parseInt(b.label, 10);
+        if (isNaN(v)) return "#7b5ea7";
+        const t = Math.min(v / 9, 1);
+        return `rgb(${Math.round(215 + t * (123 - 215))},${Math.round(223 + t * (94 - 223))},${Math.round(226 + t * (167 - 226))})`;
+      });
+      rebuildChart("criticFailuresPerTraceChart", document.getElementById("criticFailuresPerTraceChart"), {
+        type: "bar",
+        data: {
+          labels: story.failureBuckets.map((b) => b.label),
+          datasets: [{ label: "# traces", data: story.failureBuckets.map((b) => b.count), backgroundColor: fbColors }]
+        },
+        options: {
+          responsive: true,
+          scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { title: { display: true, text: "major failures per trace" } } },
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `${String(ctx.raw)} traces (${fmtPct(ctx.raw, story.totalTraces)})` } } }
+        }
+      });
+
+      // Per-trace table
+      const tableHeader = `<tr><th>task</th><th>trial</th><th>major failures</th><th>correct</th><th>incorrect</th><th>usefulness</th><th>overall verdict</th></tr>`;
+      const tableRows = [...rows]
+        .sort((a, b) => b.majorFailures - a.majorFailures || a.usefulnessScore - b.usefulnessScore)
+        .map((r) => {
+          const verdict = truncateText(r.analysis?.overall_verdict || "", 220);
+          return `<tr><td>${esc(r.taskId)}</td><td>${String(r.trial)}</td><td>${String(r.majorFailures)}</td><td>${String(r.outcomeCounts.correct_feedback)}</td><td>${String(r.outcomeCounts.incorrect_feedback)}</td><td>${fmt(r.usefulnessScore)}</td><td>${esc(verdict)}</td></tr>`;
+        }).join("");
+      tableEl.innerHTML = tableHeader + (tableRows || `<tr><td colspan="7" class="muted">No trace rows.</td></tr>`);
+    }
+
     function rebuildChart(key, element, cfg) {
       if (charts[key]) charts[key].destroy();
       charts[key] = new Chart(element, cfg);
     }
 
-    function renderCharts(stats) {
+    function renderCharts(stats, toplineOnlyStats = []) {
       const ks = ["1", "2", "3"];
+      const passChartStats = [...stats];
+      toplineOnlyStats.forEach((extra) => {
+        if (extra.key === "glm47_flash_direct") {
+          const directIdx = passChartStats.findIndex((s) => s.key === "served_direct");
+          if (directIdx >= 0) {
+            passChartStats.splice(directIdx + 1, 0, extra);
+            return;
+          }
+        }
+        passChartStats.push(extra);
+      });
 
       rebuildChart("passHatChart", document.getElementById("passHatChart"), {
         type: "bar",
         data: {
           labels: ks.map((k) => `k=${k}`),
-          datasets: stats.map((s) => ({
+          datasets: passChartStats.map((s) => ({
             label: s.label,
             data: ks.map((k) => s.passHat[k]),
             backgroundColor: s.color
@@ -2213,7 +2813,7 @@
         type: "bar",
         data: {
           labels: ks.map((k) => `k=${k}`),
-          datasets: stats.map((s) => ({
+          datasets: passChartStats.map((s) => ({
             label: s.label,
             data: ks.map((k) => s.passAt[k]),
             backgroundColor: s.color
@@ -2324,10 +2924,10 @@
         if (hasTools === "without_tools" && t.hasTools) return false;
         if (assertionFilter === "failed_only" && t.failedAssertions.length === 0) return false;
 
-        const au = t.adapterUsefulness;
+        const au = t.adapterUsefulness || t.criticUsefulness;
         if (adapterAnalysisFilter === "with_analysis" && !au) return false;
         if (adapterAnalysisFilter === "major_failures" && (!au || au.majorFailures <= 0)) return false;
-        if (adapterAnalysisFilter === "fixed_issue" && (!au || au.outcomeCounts.fixed <= 0)) return false;
+        if (adapterAnalysisFilter === "fixed_issue" && (!au || (au.outcomeCounts.fixed || au.outcomeCounts.correct_feedback || 0) <= 0)) return false;
         if (adapterAnalysisFilter === "no_analysis" && au) return false;
 
         if (adapterOutcomeFilter !== "all") {
@@ -2401,7 +3001,7 @@
       const body = rows
         .map((t) => {
           const cls = `trace-row${traceState.selectedUid === t.uid ? " active" : ""}`;
-          const au = t.adapterUsefulness;
+          const au = t.adapterUsefulness || t.criticUsefulness;
           return `
             <tr class="${cls}" data-trace-uid="${esc(t.uid)}">
               <td>${esc(t.modelLabel)}</td>
@@ -2625,6 +3225,7 @@
               ? truncateText(safeJson(intermediate.api_draft_tool_calls), 1200)
               : undefined,
             adapter: intermediate.adapter ? truncateText(intermediate.adapter, 1200) : undefined,
+            critic: intermediate.critic ? truncateText(intermediate.critic, 1200) : undefined,
             final: intermediate.final ? truncateText(intermediate.final, 1200) : undefined
           };
         }
@@ -2650,6 +3251,13 @@
               trace_summary: trace.adapterUsefulness.analysis?.trace_summary || "",
               overall_verdict: trace.adapterUsefulness.analysis?.overall_verdict || "",
               major_api_failures: trace.adapterUsefulness.analysis?.major_api_failures || []
+            }
+          : null,
+        critic_usefulness: trace.criticUsefulness
+          ? {
+              trace_summary: trace.criticUsefulness.analysis?.trace_summary || "",
+              overall_verdict: trace.criticUsefulness.analysis?.overall_verdict || "",
+              major_api_failures: trace.criticUsefulness.analysis?.major_api_failures || []
             }
           : null,
         reward_info: trace.rewardInfo,
@@ -2822,45 +3430,47 @@
       `;
 
       const adapterInfo = trace.adapterUsefulness;
-      const adapterPanel = adapterInfo
+      const criticInfo = trace.criticUsefulness;
+      const usefulnessInfo = adapterInfo || criticInfo;
+      const usefulnessLabel = adapterInfo ? "Adapter" : "Critic";
+      const outcomeField = adapterInfo ? "adapter_outcome" : "critic_feedback_quality";
+
+      function renderUsefulnessFailureItem(f, idx) {
+        const jump = Number.isInteger(Number(f?.turn_idx))
+          ? `<button class="jump-btn" type="button" data-jump-index="${String(Number(f.turn_idx))}">Jump</button>`
+          : `<span class="muted">no jump</span>`;
+        const outcomeValue = f?.[outcomeField] || f?.adapter_outcome || f?.critic_feedback_quality || "unknown";
+        return `
+          <div class="adapter-failure-item">
+            <div>
+              <strong>${esc(`${idx + 1}. turn ${String(f?.turn_idx)}`)}</strong>
+              <span class="${outcomeCssClass(outcomeValue)}">${esc(outcomeValue)}</span>
+              <span class="chip">root ${esc(f?.root_cause || "unknown")}</span>
+            </div>
+            <div>${esc(f?.api_issue || "")}</div>
+            ${f?.evidence ? `<div class="muted">${esc(truncateText(f.evidence, 260))}</div>` : ""}
+            <div style="margin-top:4px;">${jump}</div>
+          </div>
+        `;
+      }
+
+      const adapterPanel = usefulnessInfo
         ? `
           <div class="adapter-panel">
-            <div class="assert-title">Adapter usefulness</div>
+            <div class="assert-title">${usefulnessLabel} usefulness</div>
             <div>
-              <span class="chip">major failures ${String(adapterInfo.majorFailures)}</span>
-              <span class="chip">fixed ${String(adapterInfo.fixedCount)}</span>
-              <span class="chip">usefulness ${fmt(adapterInfo.usefulnessScore)}</span>
+              <span class="chip">major failures ${String(usefulnessInfo.majorFailures)}</span>
+              <span class="chip">${adapterInfo ? "fixed" : "correct"} ${String(usefulnessInfo.fixedCount)}</span>
+              <span class="chip">usefulness ${fmt(usefulnessInfo.usefulnessScore)}</span>
             </div>
-            ${adapterInfo.analysis?.trace_summary ? `<div class="muted" style="margin-top:4px;">${esc(truncateText(adapterInfo.analysis.trace_summary, 320))}</div>` : ""}
-            ${adapterInfo.analysis?.overall_verdict ? `<div style="margin-top:4px;">${esc(truncateText(adapterInfo.analysis.overall_verdict, 420))}</div>` : ""}
-            ${(adapterInfo.analysis?.major_api_failures || []).length
-              ? `
-                <div style="margin-top:6px;">
-                  ${(adapterInfo.analysis.major_api_failures || [])
-                    .map((f, idx) => {
-                      const jump = Number.isInteger(Number(f?.turn_idx))
-                        ? `<button class="jump-btn" type="button" data-jump-index="${String(Number(f.turn_idx))}">Jump</button>`
-                        : `<span class="muted">no jump</span>`;
-                      return `
-                        <div class="adapter-failure-item">
-                          <div>
-                            <strong>${esc(`${idx + 1}. turn ${String(f?.turn_idx)}`)}</strong>
-                            <span class="${outcomeCssClass(f?.adapter_outcome)}">${esc(f?.adapter_outcome || "unknown")}</span>
-                            <span class="chip">root ${esc(f?.root_cause || "unknown")}</span>
-                          </div>
-                          <div>${esc(f?.api_issue || "")}</div>
-                          ${f?.evidence ? `<div class="muted">${esc(truncateText(f.evidence, 260))}</div>` : ""}
-                          <div style="margin-top:4px;">${jump}</div>
-                        </div>
-                      `;
-                    })
-                    .join("")}
-                </div>
-              `
-              : `<div class="muted" style="margin-top:6px;">No major API failures in adapter usefulness analysis.</div>`}
+            ${usefulnessInfo.analysis?.trace_summary ? `<div class="muted" style="margin-top:4px;">${esc(truncateText(usefulnessInfo.analysis.trace_summary, 320))}</div>` : ""}
+            ${usefulnessInfo.analysis?.overall_verdict ? `<div style="margin-top:4px;">${esc(truncateText(usefulnessInfo.analysis.overall_verdict, 420))}</div>` : ""}
+            ${(usefulnessInfo.analysis?.major_api_failures || []).length
+              ? `<div style="margin-top:6px;">${(usefulnessInfo.analysis.major_api_failures || []).map(renderUsefulnessFailureItem).join("")}</div>`
+              : `<div class="muted" style="margin-top:6px;">No major API failures in ${usefulnessLabel.toLowerCase()} usefulness analysis.</div>`}
           </div>
         `
-        : `<div class="muted" style="margin-top:8px;">No adapter usefulness annotation for this trace.</div>`;
+        : `<div class="muted" style="margin-top:8px;">No usefulness annotation for this trace.</div>`;
 
       const failedAssertions = trace.failedAssertions.map((a) => ({
         ...a,
@@ -2898,7 +3508,7 @@
         .map(({ m, i }) => {
           const role = m.role || "other";
           const baseRoleClass = role === "user" ? "role-user" : role === "assistant" ? "role-assistant" : role === "tool" ? "role-tool" : "role-other";
-          const turnIssues = adapterInfo?.issuesByTurn?.get(i) || [];
+          const turnIssues = usefulnessInfo?.issuesByTurn?.get(i) || [];
           const roleClass = `${baseRoleClass}${turnIssues.length ? " adapter-hit" : ""}`;
           const roleLabel = role;
 
@@ -2971,6 +3581,7 @@
                 ${intermediate.api_draft != null ? `<div class="muted">api_draft content</div><pre>${highlightText(intermediate.api_draft, queryRaw)}</pre>` : ""}
                 ${draftToolCallsHtml ? `<div class="muted">api_draft tool calls</div>${draftToolCallsHtml}` : ""}
                 ${intermediate.adapter ? `<div class="muted">adapter decision</div><pre>${highlightText(intermediate.adapter, queryRaw)}</pre>` : ""}
+                ${intermediate.critic ? `<div class="muted">critic feedback</div><pre>${highlightText(intermediate.critic, queryRaw)}</pre>` : ""}
                 ${intermediate.final ? `<div class="muted">final content</div><pre>${highlightText(intermediate.final, queryRaw)}</pre>` : ""}
               </details>
             `
@@ -2979,19 +3590,22 @@
           const turnIssuesHtml = turnIssues.length
             ? `
               <div class="adapter-panel" style="margin-top:8px; background:#fff8ee; border-color:#efd8b5;">
-                <div class="assert-title" style="margin-bottom:2px;">Adapter usefulness notes for this turn</div>
+                <div class="assert-title" style="margin-bottom:2px;">${usefulnessLabel} usefulness notes for this turn</div>
                 ${turnIssues
                   .map(
-                    (issue) => `
+                    (issue) => {
+                      const ov = issue?.[outcomeField] || issue?.adapter_outcome || issue?.critic_feedback_quality || "unknown";
+                      return `
                       <div class="adapter-failure-item">
                         <div>
-                          <span class="${outcomeCssClass(issue?.adapter_outcome)}">${esc(issue?.adapter_outcome || "unknown")}</span>
+                          <span class="${outcomeCssClass(ov)}">${esc(ov)}</span>
                           <span class="chip">root ${esc(issue?.root_cause || "unknown")}</span>
                         </div>
                         <div>${esc(issue?.api_issue || "")}</div>
                         ${issue?.evidence ? `<div class="muted">${esc(truncateText(issue.evidence, 220))}</div>` : ""}
                       </div>
-                    `
+                    `;
+                    }
                   )
                   .join("")}
               </div>
@@ -3132,11 +3746,19 @@
       try {
         const loaded = [];
         const stats = [];
+        const toplineOnlyStats = [];
 
         for (const run of RUNS) {
           const { json, loadedFrom } = await fetchJsonWithFallback(run.files);
           loaded.push({ label: run.label, path: loadedFrom });
           stats.push(buildStats(run, json));
+        }
+
+        for (const run of TOPLINE_ONLY_RUNS) {
+          const optional = await fetchOptionalJsonWithFallback(run.files);
+          if (!optional) continue;
+          loaded.push({ label: `${run.label} (topline only)`, path: optional.loadedFrom });
+          toplineOnlyStats.push(buildStats(run, optional.json));
         }
 
         const usefulness = await fetchOptionalJsonWithFallback(ADAPTER_USEFULNESS_FILES);
@@ -3153,17 +3775,37 @@
           loaded.push({ label: "adapter-usefulness", path: usefulness.loadedFrom });
         }
 
+        const criticUsefulness = await fetchOptionalJsonWithFallback(CRITIC_USEFULNESS_FILES);
+        if (criticUsefulness) {
+          const parsed = buildCriticUsefulnessData(criticUsefulness.json);
+          criticUsefulnessState.loaded = true;
+          criticUsefulnessState.sourcePath = criticUsefulness.loadedFrom;
+          criticUsefulnessState.raw = parsed.raw;
+          criticUsefulnessState.aggregateCounts = parsed.aggregateCounts;
+          criticUsefulnessState.rootCauseCounts = parsed.rootCauseCounts;
+          criticUsefulnessState.traceRows = parsed.traceRows;
+          criticUsefulnessState.traceMap = parsed.traceMap;
+          criticUsefulnessState.numTracesAnalyzed = parsed.numTracesAnalyzed;
+          loaded.push({ label: "critic-usefulness", path: criticUsefulness.loadedFrom });
+        }
+
         const traces = stats.flatMap((s) => s.traces);
         if (adapterUsefulnessState.loaded) {
           const match = attachAdapterUsefulnessToTraces(traces);
           adapterUsefulnessState.matchedToViewer = match.matched;
         }
+        if (criticUsefulnessState.loaded) {
+          const match = attachCriticUsefulnessToTraces(traces);
+          criticUsefulnessState.matchedToViewer = match.matched;
+        }
 
+        const statsForHeadline = [...stats, ...toplineOnlyStats];
         renderRunFiles(loaded);
-        renderMetricsTable(stats);
+        renderMetricsTable(statsForHeadline);
         renderInsights(stats);
-        renderCharts(stats);
+        renderCharts(stats, toplineOnlyStats);
         renderAdapterUsefulnessSection();
+        renderCriticUsefulnessSection();
         loadAdapterExamples();
         initTraceExplorer(traces);
         initCopilot();

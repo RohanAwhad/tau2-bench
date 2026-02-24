@@ -1,0 +1,77 @@
+{
+  "served_direct_v1_gpt-oss-120b": {
+    "path": "/Users/rawhad/1_Projects/tau2-bench/experiments/node09_simulation_jsons_all_20260222/SERVER_31e8ea6f7b9be2bb101867819082b673b9a72f9f_BENCH_58dd82da0df690a95a1512a1cce96b71ac38b396/20260221_191706_prod/tau_outputs/data/simulations/served_direct_prod_3x50_mc1_temp1_default_tauref_ra_benchmarking.json",
+    "num_tasks": 50,
+    "num_trials": 3,
+    "pass_hat": {
+      "1": 0.42,
+      "2": 0.3,
+      "3": 0.26
+    },
+    "pass_at": {
+      "1": 0.42,
+      "2": 0.54,
+      "3": 0.62
+    }
+  },
+  "served_direct_v9_qwen3": {
+    "path": "/Users/rawhad/1_Projects/tau2-bench/experiments/node09_simulation_jsons_all_20260224/SERVER_39379bb90805560ebb550f4f97b3c4f5d0e7d201_BENCH_58dd82da0df690a95a1512a1cce96b71ac38b396/20260224_160443_prod/tau_outputs/data/simulations/served_direct_prod_3x50_mc20_temp1_v9_39379bb.json",
+    "num_tasks": 50,
+    "num_trials": 3,
+    "pass_hat": {
+      "1": 0.38,
+      "2": 0.36,
+      "3": 0.34
+    },
+    "pass_at": {
+      "1": 0.38,
+      "2": 0.4,
+      "3": 0.4
+    }
+  },
+  "served_adapter_v5_qwen": {
+    "path": "/Users/rawhad/1_Projects/tau2-bench/experiments/node09_simulation_jsons_all_20260222/SERVER_f675d96d5130d154633073811a05d656cbeb1001_BENCH_58dd82da0df690a95a1512a1cce96b71ac38b396/20260222_145204_prod/tau_outputs/data/simulations/served_adapter_prod_3x50_mc6_temp1_v5_f675d96_qwen30a3b.json",
+    "num_tasks": 50,
+    "num_trials": 3,
+    "pass_hat": {
+      "1": 0.45333333333333337,
+      "2": 0.34,
+      "3": 0.28
+    },
+    "pass_at": {
+      "1": 0.45333333333333337,
+      "2": 0.5666666666666668,
+      "3": 0.62
+    }
+  },
+  "served_critic_v6_qwen": {
+    "path": "/Users/rawhad/1_Projects/tau2-bench/experiments/node09_simulation_jsons_all_20260222/SERVER_f675d96d5130d154633073811a05d656cbeb1001_BENCH_58dd82da0df690a95a1512a1cce96b71ac38b396/20260222_145204_prod_02/tau_outputs/data/simulations/served_critic_prod_3x50_mc6_temp1_v6_f675d96_qwen30a3b.json",
+    "num_tasks": 50,
+    "num_trials": 3,
+    "pass_hat": {
+      "1": 0.36666666666666664,
+      "2": 0.29333333333333333,
+      "3": 0.26
+    },
+    "pass_at": {
+      "1": 0.3666666666666667,
+      "2": 0.44,
+      "3": 0.48
+    }
+  },
+  "served_critic_v7_node05": {
+    "path": "/Users/rawhad/1_Projects/tau2-bench/experiments/node05_simulation_jsons_all_20260222/SERVER_935466a9bc9bb03c2df83da6796a7d3ac7ca54dc_BENCH_58dd82da0df690a95a1512a1cce96b71ac38b396/20260222_183017_prod/tau_outputs/data/simulations/served_critic_prod_3x50_mc5_temp1_v7_node05_main.json",
+    "num_tasks": 50,
+    "num_trials": 3,
+    "pass_hat": {
+      "1": 0.48666666666666664,
+      "2": 0.3466666666666666,
+      "3": 0.26
+    },
+    "pass_at": {
+      "1": 0.4866666666666667,
+      "2": 0.6266666666666667,
+      "3": 0.68
+    }
+  }
+}

@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qwen Run Report</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #f3f6f7;
+      --card: #ffffff;
+      --ink: #1f2a30;
+      --muted: #5f6d74;
+      --line: #d3dde1;
+      --accent: #2b6777;
+      --accent-soft: #e9f2f5;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 0% 0%, #e7eef1, var(--bg) 40%),
+        var(--bg);
+      font-family: "Segoe UI", "Avenir Next", "Helvetica Neue", sans-serif;
+      line-height: 1.45;
+    }
+
+    .wrap {
+      max-width: 1180px;
+      margin: 24px auto;
+      padding: 0 16px 24px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.7rem;
+      letter-spacing: 0.01em;
+    }
+
+    p, li, td, th {
+      font-size: 0.93rem;
+    }
+
+    .muted { color: var(--muted); }
+
+    .card {
+      margin-top: 14px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 12px;
+    }
+
+    img {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    .chart-wrap {
+      margin-top: 8px;
+      height: 340px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      padding: 8px;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      padding: 7px 6px;
+    }
+
+    th {
+      font-weight: 700;
+      background: #f8fbfc;
+    }
+
+    code {
+      font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+      background: #eef3f5;
+      border: 1px solid #d9e3e7;
+      border-radius: 6px;
+      padding: 1px 6px;
+      font-size: 0.85em;
+    }
+
+    .chip {
+      display: inline-block;
+      padding: 4px 8px;
+      margin-right: 8px;
+      margin-bottom: 6px;
+      border-radius: 999px;
+      border: 1px solid #d8e3e7;
+      background: var(--accent-soft);
+      color: #2a4a54;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .comparison-card {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fcfdfd;
+      padding: 10px;
+    }
+
+    .comparison-head {
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .comparison-note {
+      margin: 6px 0 8px;
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+
+    .example-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .example-box {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 0.85rem;
+      background: #fff;
+    }
+
+    .example-box.improved {
+      border-color: #c5dfcd;
+      background: #f4fbf6;
+    }
+
+    .example-box.worsened {
+      border-color: #e8caca;
+      background: #fff6f4;
+    }
+
+    .example-title {
+      font-weight: 700;
+      margin-bottom: 3px;
+    }
+
+    @media (max-width: 760px) {
+      .example-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Qwen Intervention Results Report</h1>
+    <p class="muted">
+      Baseline used for the new intervention metric set: <code>served_direct_v9_qwen3</code>.
+      Pass plots include all 5 runs for context.
+    </p>
+
+    <div class="card">
+      <span class="chip">Domain: airline</span>
+      <span class="chip">Tasks: 50</span>
+      <span class="chip">Trials: 3</span>
+      <span class="chip">Units: task counts</span>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <strong>Pass^k (all 5 runs)</strong>
+        <div class="chart-wrap">
+          <canvas id="passHatChart"></canvas>
+        </div>
+        <div class="muted" style="margin-top:6px;">Hover bars for exact values. Click legend labels to toggle runs.</div>
+        <noscript>
+          <img src="pass_hat_k_all5_v1_v9_v5_v6_v7.png" alt="Pass^k chart for five runs" />
+        </noscript>
+      </div>
+      <div class="card">
+        <strong>Pass@k (all 5 runs)</strong>
+        <div class="chart-wrap">
+          <canvas id="passAtChart"></canvas>
+        </div>
+        <div class="muted" style="margin-top:6px;">Same interactions as pass^k chart.</div>
+        <noscript>
+          <img src="pass_at_k_all5_v1_v9_v5_v6_v7.png" alt="Pass@k chart for five runs" />
+        </noscript>
+      </div>
+    </div>
+
+    <div class="card">
+      <strong>Pass metrics table (all 5 runs)</strong>
+      <table>
+        <tr>
+          <th>run</th>
+          <th>pass^1</th>
+          <th>pass^2</th>
+          <th>pass^3</th>
+          <th>pass@1</th>
+          <th>pass@2</th>
+          <th>pass@3</th>
+        </tr>
+        <tr><td>served_direct_v1_gpt-oss-120b</td><td>0.4200</td><td>0.3000</td><td>0.2600</td><td>0.4200</td><td>0.5400</td><td>0.6200</td></tr>
+        <tr><td>served_direct_v9_qwen3</td><td>0.3800</td><td>0.3600</td><td>0.3400</td><td>0.3800</td><td>0.4000</td><td>0.4000</td></tr>
+        <tr><td>served_adapter_v5_qwen</td><td>0.4533</td><td>0.3400</td><td>0.2800</td><td>0.4533</td><td>0.5667</td><td>0.6200</td></tr>
+        <tr><td>served_critic_v6_qwen</td><td>0.3667</td><td>0.2933</td><td>0.2600</td><td>0.3667</td><td>0.4400</td><td>0.4800</td></tr>
+        <tr><td>served_critic_v7_node05</td><td>0.4867</td><td>0.3467</td><td>0.2600</td><td>0.4867</td><td>0.6267</td><td>0.6800</td></tr>
+      </table>
+      <p class="muted">Raw export: <code>pass_metrics_all5_v1_v9_v5_v6_v7.json</code></p>
+    </div>
+
+    <div class="card">
+      <strong>New intervention metric set (baseline: served_direct_v9_qwen3)</strong>
+      <p class="muted" style="margin-top:6px;">
+        One-line definition: for each task, compare candidate vs baseline total successes across 3 trials;
+        if candidate is higher that task is <code>improved</code>, if lower it is <code>worsened</code>.
+      </p>
+      <table>
+        <tr>
+          <th>run</th>
+          <th>mean_delta</th>
+          <th>improved_questions</th>
+          <th>worsened_questions</th>
+          <th>hard_rescue_number</th>
+          <th>easy_harm_number</th>
+        </tr>
+        <tr><td>served_adapter_v5_qwen</td><td>+0.0733</td><td>14 / 50</td><td>7 / 50</td><td>13 / 30</td><td>6 / 17</td></tr>
+        <tr><td>served_critic_v6_qwen</td><td>-0.0133</td><td>6 / 50</td><td>7 / 50</td><td>4 / 30</td><td>6 / 17</td></tr>
+        <tr><td>served_critic_v7_node05</td><td>+0.1067</td><td>16 / 50</td><td>8 / 50</td><td>14 / 30</td><td>8 / 17</td></tr>
+      </table>
+
+      <div class="comparison-grid">
+        <div class="comparison-card">
+          <div class="comparison-head">served_adapter_v5_qwen</div>
+          <div class="comparison-note">14 improved vs 7 worsened tasks; 13 hard-task rescues and 6 easy-task harms.</div>
+          <div class="example-grid">
+            <div class="example-box improved">
+              <div class="example-title">Improved Example</div>
+              <div><strong>Task 16</strong>: 0/3 -> 3/3</div>
+              <div class="muted">Test finding cheapest economy flight on the next day.</div>
+            </div>
+            <div class="example-box worsened">
+              <div class="example-title">Worsened Example</div>
+              <div><strong>Task 10</strong>: 3/3 -> 0/3</div>
+              <div class="muted">Cabin-change policy consistency under cost constraints.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="comparison-card">
+          <div class="comparison-head">served_critic_v6_qwen</div>
+          <div class="comparison-note">6 improved vs 7 worsened tasks; only 4 hard-task rescues with 6 easy-task harms.</div>
+          <div class="example-grid">
+            <div class="example-box improved">
+              <div class="example-title">Improved Example</div>
+              <div><strong>Task 19</strong>: 0/3 -> 2/3</div>
+              <div class="muted">Basic-economy modification policy handling.</div>
+            </div>
+            <div class="example-box worsened">
+              <div class="example-title">Worsened Example</div>
+              <div><strong>Task 0</strong>: 3/3 -> 1/3</div>
+              <div class="muted">Disallowed cancellation refusal reliability.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="comparison-card">
+          <div class="comparison-head">served_critic_v7_node05</div>
+          <div class="comparison-note">16 improved vs 8 worsened tasks; strongest rescue count (14) but largest easy-task harm count (8).</div>
+          <div class="example-grid">
+            <div class="example-box improved">
+              <div class="example-title">Improved Example</div>
+              <div><strong>Task 8</strong>: 0/3 -> 3/3</div>
+              <div class="muted">Booking flow with extra passenger constraints.</div>
+            </div>
+            <div class="example-box worsened">
+              <div class="example-title">Worsened Example</div>
+              <div><strong>Task 6</strong>: 3/3 -> 1/3</div>
+              <div class="muted">Refusing insurance-add requests under pressure.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const PASS_METRICS_PATH = "pass_metrics_all5_v1_v9_v5_v6_v7.json";
+    const RUN_ORDER = [
+      "served_direct_v1_gpt-oss-120b",
+      "served_direct_v9_qwen3",
+      "served_adapter_v5_qwen",
+      "served_critic_v6_qwen",
+      "served_critic_v7_node05"
+    ];
+    const RUN_COLORS = {
+      "served_direct_v1_gpt-oss-120b": "#1f8a70",
+      "served_direct_v9_qwen3": "#2b6777",
+      "served_adapter_v5_qwen": "#c15f3c",
+      "served_critic_v6_qwen": "#7b5ea7",
+      "served_critic_v7_node05": "#9c6644"
+    };
+
+    const chartState = {};
+
+    function fmt(v) {
+      return Number(v).toFixed(4);
+    }
+
+    function readKMetric(runMetrics, key, k) {
+      const bucket = runMetrics?.[key] || {};
+      return Number(bucket[String(k)] ?? bucket[k] ?? 0);
+    }
+
+    function buildDatasets(allMetrics, metricKey) {
+      return RUN_ORDER
+        .filter((runKey) => allMetrics[runKey])
+        .map((runKey) => ({
+          label: runKey,
+          data: [1, 2, 3].map((k) => readKMetric(allMetrics[runKey], metricKey, k)),
+          backgroundColor: RUN_COLORS[runKey] || "#4f6d7a"
+        }));
+    }
+
+    function rebuildChart(canvasId, metricKey, yLabel) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas || !window.__qwenPassMetrics) return;
+
+      if (chartState[canvasId]) chartState[canvasId].destroy();
+
+      chartState[canvasId] = new Chart(canvas, {
+        type: "bar",
+        data: {
+          labels: ["k=1", "k=2", "k=3"],
+          datasets: buildDatasets(window.__qwenPassMetrics, metricKey)
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: "nearest",
+            intersect: true
+          },
+          plugins: {
+            legend: {
+              position: "bottom"
+            },
+            tooltip: {
+              mode: "nearest",
+              intersect: true,
+              callbacks: {
+                label: (ctx) => `${ctx.dataset.label}: ${fmt(ctx.raw)}`
+              }
+            }
+          },
+          scales: {
+            y: {
+              min: 0,
+              max: 1,
+              title: {
+                display: true,
+                text: yLabel
+              }
+            }
+          }
+        }
+      });
+    }
+
+    async function initCharts() {
+      try {
+        const res = await fetch(PASS_METRICS_PATH, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        window.__qwenPassMetrics = await res.json();
+        rebuildChart("passHatChart", "pass_hat", "pass^k");
+        rebuildChart("passAtChart", "pass_at", "pass@k");
+      } catch (err) {
+        console.error("Failed to load pass metrics for charts:", err);
+      }
+    }
+
+    initCharts();
+  </script>
+</body>
+</html>

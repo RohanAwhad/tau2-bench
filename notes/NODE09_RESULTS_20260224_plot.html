@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Node09 Benchmark Comparison (Temp=1)</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    body {
+      margin: 24px;
+      font-family: "Segoe UI", Helvetica, Arial, sans-serif;
+      color: #1f2937;
+      background: #f8fafc;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+    p {
+      margin: 0 0 16px;
+      color: #475569;
+    }
+    #chart {
+      width: 100%;
+      height: 680px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Node09 Benchmark Comparison (Temp=1)</h1>
+  <p>Interactive bars with metric values on x-axis (pass^k, pass@k, avg reward).</p>
+
+  <div id="chart"></div>
+
+  <script>
+    const variants = [
+      { name: "v1 direct", avgReward: 0.4200, passHat: [0.4200, 0.3000, 0.2600], passAt: [0.4200, 0.5400, 0.6200] },
+      { name: "v9 direct", avgReward: 0.3800, passHat: [0.3800, 0.3600, 0.3400], passAt: [0.3800, 0.4000, 0.4000] },
+      { name: "v5 adapter", avgReward: 0.4533, passHat: [0.4533, 0.3400, 0.2800], passAt: [0.4533, 0.5667, 0.6200] },
+      { name: "v5 critic", avgReward: 0.3800, passHat: [0.3800, 0.2733, 0.2200], passAt: [0.3800, 0.4867, 0.5400] },
+      { name: "v6 critic", avgReward: 0.3667, passHat: [0.3667, 0.2933, 0.2600], passAt: [0.3667, 0.4400, 0.4800] },
+      { name: "v3 adapter", avgReward: 0.4933, passHat: [0.4933, 0.3800, 0.3200], passAt: [0.4933, 0.6067, 0.6600] },
+      { name: "v3 critic", avgReward: 0.5267, passHat: [0.5267, 0.3733, 0.2800], passAt: [0.5267, 0.6800, 0.7400] },
+      { name: "v4 critic", avgReward: 0.5133, passHat: [0.5133, 0.3733, 0.2800], passAt: [0.5133, 0.6533, 0.7000] },
+    ];
+
+    const colors = [
+      "#1d4ed8",
+      "#0369a1",
+      "#0f766e",
+      "#6d28d9",
+      "#b45309",
+      "#be123c",
+      "#15803d",
+      "#374151",
+    ];
+
+    const xPassHat = ["pass^1", "pass^2", "pass^3"];
+    const xPassAt = ["pass@1", "pass@2", "pass@3"];
+    const xAvg = ["avg_reward"];
+    const hoverFmt = "%{fullData.name}<br>%{x}=%{y:.4f}<extra></extra>";
+
+    const traces = variants.map((variant, idx) => ({
+      type: "bar",
+      name: variant.name,
+      x: xPassHat,
+      y: variant.passHat,
+      marker: { color: colors[idx % colors.length] },
+      hovertemplate: hoverFmt,
+    }));
+
+    const layout = {
+      title: "Pass^k comparison",
+      barmode: "group",
+      paper_bgcolor: "#ffffff",
+      plot_bgcolor: "#ffffff",
+      xaxis: {
+        title: "Metric",
+      },
+      yaxis: {
+        title: "Score",
+        range: [0, 1],
+      },
+      legend: {
+        orientation: "h",
+        y: -0.22,
+      },
+      margin: {
+        t: 72,
+        b: 130,
+        l: 56,
+        r: 24,
+      },
+      updatemenus: [
+        {
+          type: "buttons",
+          direction: "left",
+          x: 0,
+          y: 1.16,
+          showactive: true,
+          buttons: [
+            {
+              label: "Pass^k",
+              method: "update",
+              args: [
+                {
+                  x: variants.map(() => xPassHat),
+                  y: variants.map((v) => v.passHat),
+                  hovertemplate: variants.map(() => hoverFmt),
+                },
+                {
+                  title: "Pass^k comparison",
+                  xaxis: { title: "Metric" },
+                  yaxis: { title: "Score", range: [0, 1] },
+                },
+              ],
+            },
+            {
+              label: "Pass@k",
+              method: "update",
+              args: [
+                {
+                  x: variants.map(() => xPassAt),
+                  y: variants.map((v) => v.passAt),
+                  hovertemplate: variants.map(() => hoverFmt),
+                },
+                {
+                  title: "Pass@k comparison",
+                  xaxis: { title: "Metric" },
+                  yaxis: { title: "Score", range: [0, 1] },
+                },
+              ],
+            },
+            {
+              label: "Avg reward",
+              method: "update",
+              args: [
+                {
+                  x: variants.map(() => xAvg),
+                  y: variants.map((v) => [v.avgReward]),
+                  hovertemplate: variants.map(() => hoverFmt),
+                },
+                {
+                  title: "Average reward comparison",
+                  xaxis: { title: "Metric" },
+                  yaxis: { title: "Avg reward", range: [0, 1] },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    Plotly.newPlot("chart", traces, layout, { responsive: true, displaylogo: false });
+  </script>
+</body>
+</html>
