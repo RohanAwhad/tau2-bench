@@ -257,22 +257,41 @@
       <table>
         <tr>
           <th>run</th>
-          <th>mean_delta</th>
-          <th>improved_questions</th>
-          <th>worsened_questions</th>
           <th>hard_rescue_number</th>
           <th>easy_harm_number</th>
+          <!-- <th>improved_questions</th> -->
+          <!-- <th>worsened_questions</th> -->
         </tr>
-        <tr><td>adapter-mode</td><td>+0.0333</td><td>8 / 50</td><td>8 / 50</td><td>5 / 19</td><td>2 / 13</td></tr>
-        <tr><td>critic-mode</td><td>-0.0533</td><td>7 / 50</td><td>14 / 50</td><td>2 / 19</td><td>5 / 13</td></tr>
-        <tr><td>critic-mode [UCB MAST style]</td><td>+0.0667</td><td>14 / 50</td><td>10 / 50</td><td>7 / 19</td><td>6 / 13</td></tr>
+
+        <tr>
+          <td>adapter-mode</td>
+          <td>5 / 19</td>
+          <td>2 / 13</td>
+          <!-- <td>8 / 50</td> -->
+          <!-- <td>8 / 50</td> -->
+        </tr>
+        <tr>
+          <td>critic-mode</td>
+          <td>2 / 19</td>
+          <td>5 / 13</td>
+          <!-- <td>7 / 50</td> -->
+          <!-- <td>14 / 50</td> -->
+        </tr>
+        <tr>
+          <td>critic-mode [UCB MAST style]</td>
+          <td>7 / 19</td>
+          <td>6 / 13</td>
+          <!-- <td>14 / 50</td> -->
+          <!-- <td>10 / 50</td> -->
+        </tr>
+
+
       </table>
       <ul class="metric-defs">
-        <li><code>mean_delta</code>: average change in per-task win rate vs baseline (candidate minus baseline, over 3 trials).</li>
-        <li><code>improved_questions</code>: number of tasks where candidate has more successes than baseline (shown as improved / 50).</li>
-        <li><code>worsened_questions</code>: number of tasks where candidate has fewer successes than baseline (shown as worsened / 50).</li>
-        <li><code>hard_rescue_number</code>: tasks rescued from baseline hard set, where baseline had 0/3 and candidate has >0/3 (shown as rescued / hard-set size).</li>
-        <li><code>easy_harm_number</code>: tasks harmed from baseline easy set, where baseline had 3/3 and candidate has <3/3 (shown as harmed / easy-set size).</li>
+        <li><code>hard_rescue_number</code>: tasks rescued from baseline hard set, where baseline had 0/3 pass and candidate has >0/3 (shown as rescued / hard-set size).</li>
+        <li><code>easy_harm_number</code>: tasks harmed from baseline easy set, where baseline had 3/3 pass and candidate has <3/3 (shown as harmed / easy-set size).</li>
+        <!-- <li><code>improved_questions</code>: number of tasks where candidate has more successes than baseline (shown as improved / 50).</li> -->
+        <!-- <li><code>worsened_questions</code>: number of tasks where candidate has fewer successes than baseline (shown as worsened / 50).</li> -->
       </ul>
 
       <div class="comparison-grid">
